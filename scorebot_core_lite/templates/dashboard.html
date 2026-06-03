@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Scorebot Core Lite Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --panel-bg: rgba(22, 28, 45, 0.6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-color: #f3f4f6;
+            --accent-color: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.4);
+            --danger-color: #ef4444;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        h2 {
+            font-size: 1.25rem;
+            margin-top: 0;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            font-weight: 600;
+            color: #9ca3af;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-created { background-color: rgba(156, 163, 175, 0.2); color: #e5e7eb; }
+        .badge-running { background-color: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge-paused { background-color: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        .badge-finished { background-color: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+        .btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+
+        .btn-danger { background-color: var(--danger-color); }
+        .btn-danger:hover { box-shadow: 0 0 12px rgba(239, 68, 68, 0.4); }
+        .btn-warning { background-color: var(--warning-color); }
+        .btn-warning:hover { box-shadow: 0 0 12px rgba(245, 158, 11, 0.4); }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #9ca3af;
+            font-size: 0.875rem;
+        }
+
+        input, select {
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Scorebot Core Lite</h1>
+                <p style="margin: 0; color: #9ca3af;">Administration Dashboard</p>
+            </div>
+            <div>
+                <span class="badge badge-running">Active</span>
+            </div>
+        </header>
+
+        <div class="grid">
+            <div>
+                <div class="panel">
+                    <h2>Running Games</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Game ID</th>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Scored</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for game in games %}
+                            <tr>
+                                <td>{{ game.id }}</td>
+                                <td><strong>{{ game.name }}</strong></td>
+                                <td>
+                                    {% if game.status == 0 %}
+                                    <span class="badge badge-created">Created</span>
+                                    {% elif game.status == 1 %}
+                                    <span class="badge badge-running">Running</span>
+                                    {% elif game.status == 2 %}
+                                    <span class="badge badge-paused">Paused</span>
+                                    {% else %}
+                                    <span class="badge badge-finished">Finished</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ game.scored or 'Never' }}</td>
+                                <td>
+                                    {% if game.status == 0 or game.status == 2 %}
+                                    <button class="btn" onclick="controlGame({{ game.id }}, 'start')">Start</button>
+                                    {% elif game.status == 1 %}
+                                    <button class="btn btn-warning" onclick="controlGame({{ game.id }}, 'pause')">Pause</button>
+                                    <button class="btn btn-danger" onclick="controlGame({{ game.id }}, 'stop')">Stop</button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div>
+                <div class="panel">
+                    <h2>Create New Game</h2>
+                    <form id="createGameForm">
+                        <div class="form-group">
+                            <label for="gameName">Game Name</label>
+                            <input type="text" id="gameName" required placeholder="e.g. PvJ 2026 Season">
+                        </div>
+                        <div class="form-group">
+                            <label for="gameMode">Mode</label>
+                            <select id="gameMode">
+                                <option value="0">Default</option>
+                                <option value="1">Attack & Defend</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn" style="width: 100%;">Create Game</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('createGameForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('gameName').value;
+            const mode = parseInt(document.getElementById('gameMode').value);
+
+            const res = await fetch('/api/admin/games', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                },
+                body: JSON.stringify({ name, mode })
+            });
+
+            if (res.ok) {
+                location.reload();
+            } else {
+                alert('Failed to create game');
+            }
+        });
+
+        async function controlGame(gameId, action) {
+            const res = await fetch(`/api/admin/games/${gameId}/${action}`, {
+                method: 'POST',
+                headers: {
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                }
+            });
+
+            if (res.ok) {
+                location.reload();
+            } else {
+                alert(`Failed to ${action} game`);
+            }
+        }
+    </script>
+</body>
+</html>

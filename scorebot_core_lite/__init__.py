@@ -1,0 +1,1 @@
+# Scorebot-Core-Lite package

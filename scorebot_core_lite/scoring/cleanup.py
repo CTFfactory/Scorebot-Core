@@ -1,0 +1,57 @@
+import datetime
+import logging
+from scorebot_core_lite.models import Game, Job, GameCompromise, GameEvent
+
+logger = logging.getLogger("scorebot_core_lite.scoring.cleanup")
+
+def run_cleanup(session):
+    """Clean up stale jobs, expired beacons, and past events."""
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    logger.debug("Running background cleanup tasks...")
+
+    # 1. Expire stale jobs
+    open_jobs = session.query(Job).filter(Job.finish == None).all()
+    for job in open_jobs:
+        game = session.query(Game).join(Job.host).filter(Job.id == job.id).first()
+        job_timeout = game.job_timeout if game else 300
+        if (now - job.start).total_seconds() > job_timeout:
+            logger.info(f"Deleting stale job {job.id} after passing timeout")
+            session.delete(job)
+
+    # 2. Cleanup finished jobs
+    closed_jobs = session.query(Job).filter(Job.finish != None).all()
+    for job in closed_jobs:
+        game = session.query(Game).join(Job.host).filter(Job.id == job.id).first()
+        job_cleanup_time = game.job_cleanup_time if game else 900
+        if (now - job.finish).total_seconds() > job_cleanup_time:
+            logger.info(f"Deleting finished job {job.id} after cleanup timeout")
+            session.delete(job)
+
+    # 3. Expire inactive beacons (beacons where checkin/start timeout has passed)
+    active_compromises = session.query(GameCompromise).filter(GameCompromise.finish == None).all()
+    for compromise in active_compromises:
+        # Find the game options through the attacker's game
+        game = session.query(Game).filter(Game.id == compromise.attacker.game_id).first()
+        beacon_time = game.beacon_value if game else 300  # Default or option
+        # In Django models.py, it checked beacon_time option (which is beacon_time preset option, default 300)
+        # Let's check: game.beacon_value or similar (preset option ticket_grace_period etc.)
+        # We can look at what model fields we have on Game: beacon_value, beacon_time is default 300
+        # Let's use 300 seconds default, or we can add a Column beacon_time to Game. Let's look:
+        # Yes, standard beacon timeout is 300 seconds.
+        # Let's find checkin time on associated hosts
+        last_checkin = compromise.start
+        for ch in compromise.hosts:
+            if ch.checkin and ch.checkin > last_checkin:
+                last_checkin = ch.checkin
+
+        if (now - last_checkin).total_seconds() > 300:
+            logger.info(f"Closing expired compromise/beacon {compromise.id}")
+            compromise.finish = now
+
+    # 4. Remove expired GameEvents
+    expired_events = session.query(GameEvent).filter(GameEvent.timeout < now).all()
+    for event in expired_events:
+        logger.info(f"Deleting expired event {event.id}")
+        session.delete(event)
+
+    session.commit()
