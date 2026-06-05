@@ -105,6 +105,11 @@ def dashboard(request: Request):
     session = SessionLocal()
     try:
         games = session.query(Game).all()
+        logger.info(
+            "Dashboard rendering. config.API_TOKEN_ADMIN length: %d, value: %s",
+            len(config.API_TOKEN_ADMIN) if config.API_TOKEN_ADMIN else 0,
+            "configured" if config.API_TOKEN_ADMIN else "empty"
+        )
         import inspect
         sig = inspect.signature(templates.TemplateResponse)
         if "request" in sig.parameters:
