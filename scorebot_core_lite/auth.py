@@ -53,7 +53,13 @@ async def verify_monitor_token(request: Request):
     client_ip = request.client.host if request.client else "unknown"
     x_scorebot_token = request.headers.get("X-Scorebot-Token")
     if not x_scorebot_token:
-        logger.warning("Monitor auth failed from %s: X-Scorebot-Token header is missing", client_ip)
+        x_scorebot_token = request.headers.get("SBE-AUTH")
+    if not x_scorebot_token:
+        x_scorebot_token = request.headers.get("sbe-auth")
+    if not x_scorebot_token:
+        x_scorebot_token = request.headers.get("x-scorebot-token")
+    if not x_scorebot_token:
+        logger.warning("Monitor auth failed from %s: X-Scorebot-Token / SBE-AUTH header is missing", client_ip)
         raise HTTPException(status_code=403, detail="Forbidden: Monitor privilege required")
     if x_scorebot_token not in (config.API_TOKEN_MONITOR, config.API_TOKEN_ADMIN):
         logger.warning(

@@ -149,6 +149,9 @@ def import_game(data: GameImportSchema):
         services_created = 0
 
         for team_spec in spec.teams:
+            if team_spec.name.lower() == "gold":
+                logger.info("Skipping import of team '%s' (Gold Team)", team_spec.name)
+                continue
             # Assign a stable integer color from team name hash (0x000000–0xFFFFFF).
             # Blue teams get blue-ish hue; can be overridden via admin UI later.
             color_int = _team_color(team_spec.name, team_spec.color)
@@ -347,3 +350,342 @@ def _team_color(team_name: str, color_hint: str) -> int:
         return _palette[color_hint.lower()]
     # Deterministic fallback: hash team name to 24-bit color
     return hash(team_name) & 0xFFFFFF
+
+
+# ---------------------------------------------------------------------------
+# Game Configuration and Editing Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/api/admin/games/{game_id}/details", dependencies=[Depends(verify_admin_token)])
+def get_game_details(game_id: int):
+    """Retrieve full nested structure of a game, including teams, hosts, services, and parameters."""
+    session = SessionLocal()
+    try:
+        game = session.query(Game).filter(Game.id == game_id).first()
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        
+        teams_list = []
+        for team in game.teams:
+            hosts_list = []
+            for host in team.hosts:
+                services_list = []
+                for svc in host.services:
+                    services_list.append({
+                        "id": svc.id,
+                        "port": svc.port,
+                        "name": svc.name,
+                        "value": svc.value,
+                        "protocol": svc.protocol,  # 1=tcp, 2=udp
+                        "status": svc.status,
+                        "application": svc.application
+                    })
+                hosts_list.append({
+                    "id": host.id,
+                    "fqdn": host.fqdn,
+                    "name": host.name,
+                    "ip": host.ip,
+                    "online": host.online,
+                    "services": services_list
+                })
+            teams_list.append({
+                "id": team.id,
+                "name": team.name,
+                "subnet": team.subnet,
+                "color": team.color,
+                "offensive": team.offensive,
+                "minimal": team.minimal,
+                "token": team.token,
+                "visible": team.visible is not False,
+                "hosts": hosts_list
+            })
+            
+        return {
+            "id": game.id,
+            "name": game.name,
+            "mode": game.mode,
+            "status": game.status,
+            "round_time": game.round_time,
+            "job_timeout": game.job_timeout,
+            "job_cleanup_time": game.job_cleanup_time,
+            "flag_stolen_rate": game.flag_stolen_rate,
+            "flag_captured_multiplier": game.flag_captured_multiplier,
+            "beacon_value": game.beacon_value,
+            "ticket_cost": game.ticket_cost,
+            "ticket_max_score": game.ticket_max_score,
+            "ticket_grace_period": game.ticket_grace_period,
+            "ticket_max_scoring": game.ticket_max_scoring,
+            "ticket_reopen_multiplier": game.ticket_reopen_multiplier,
+            "score_exchange_rate": game.score_exchange_rate,
+            "host_ping_ratio": game.host_ping_ratio,
+            "teams": teams_list
+        }
+    finally:
+        session.close()
+
+
+class GameParametersSchema(BaseModel):
+    round_time: Optional[int] = None
+    job_timeout: Optional[int] = None
+    job_cleanup_time: Optional[int] = None
+    flag_stolen_rate: Optional[int] = None
+    flag_captured_multiplier: Optional[int] = None
+    beacon_value: Optional[int] = None
+    ticket_cost: Optional[int] = None
+    ticket_max_score: Optional[int] = None
+    ticket_grace_period: Optional[int] = None
+    ticket_max_scoring: Optional[int] = None
+    ticket_reopen_multiplier: Optional[int] = None
+    score_exchange_rate: Optional[int] = None
+    host_ping_ratio: Optional[int] = None
+
+
+@router.put("/api/admin/games/{game_id}/parameters", dependencies=[Depends(verify_admin_token)])
+def update_game_parameters(game_id: int, data: GameParametersSchema):
+    """Update general game settings/parameters."""
+    session = SessionLocal()
+    try:
+        game = session.query(Game).filter(Game.id == game_id).first()
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        for field, value in data.model_dump(exclude_unset=True).items():
+            setattr(game, field, value)
+        session.commit()
+        return {"status": "success", "message": "Parameters updated"}
+    finally:
+        session.close()
+
+
+class TeamUpdateSchema(BaseModel):
+    subnet: Optional[str] = None
+    color: Optional[int] = None
+    offensive: Optional[bool] = None
+    minimal: Optional[bool] = None
+    visible: Optional[bool] = None
+
+
+@router.put("/api/admin/games/teams/{team_id}", dependencies=[Depends(verify_admin_token)])
+def update_team(team_id: int, data: TeamUpdateSchema):
+    """Update team-specific details (subnet, color, minimal mode)."""
+    session = SessionLocal()
+    try:
+        team = session.query(GameTeam).filter(GameTeam.id == team_id).first()
+        if not team:
+            raise HTTPException(status_code=404, detail="Team not found")
+        for field, value in data.model_dump(exclude_unset=True).items():
+            setattr(team, field, value)
+        session.commit()
+        return {"status": "success", "message": "Team updated"}
+    finally:
+        session.close()
+
+
+class HostCreateSchema(BaseModel):
+    fqdn: str
+    name: Optional[str] = None
+    ip: Optional[str] = ""
+
+
+class HostUpdateSchema(BaseModel):
+    fqdn: Optional[str] = None
+    name: Optional[str] = None
+    ip: Optional[str] = None
+    online: Optional[bool] = None
+
+
+@router.post("/api/admin/games/teams/{team_id}/hosts", dependencies=[Depends(verify_admin_token)])
+def create_host(team_id: int, data: HostCreateSchema):
+    """Create a new host inside a team."""
+    session = SessionLocal()
+    try:
+        team = session.query(GameTeam).filter(GameTeam.id == team_id).first()
+        if not team:
+            raise HTTPException(status_code=404, detail="Team not found")
+        
+        name = data.name or data.fqdn.split(".")[0]
+        host = Host(fqdn=data.fqdn, name=name, ip=data.ip, team_id=team_id, online=False)
+        session.add(host)
+        session.commit()
+        session.refresh(host)
+        return {"status": "success", "host_id": host.id, "message": "Host created"}
+    finally:
+        session.close()
+
+
+@router.put("/api/admin/games/hosts/{host_id}", dependencies=[Depends(verify_admin_token)])
+def update_host(host_id: int, data: HostUpdateSchema):
+    """Update host attributes (FQDN, name, IP)."""
+    session = SessionLocal()
+    try:
+        host = session.query(Host).filter(Host.id == host_id).first()
+        if not host:
+            raise HTTPException(status_code=404, detail="Host not found")
+        for field, value in data.model_dump(exclude_unset=True).items():
+            setattr(host, field, value)
+        session.commit()
+        return {"status": "success", "message": "Host updated"}
+    finally:
+        session.close()
+
+
+@router.delete("/api/admin/games/hosts/{host_id}", dependencies=[Depends(verify_admin_token)])
+def delete_host(host_id: int):
+    """Delete a host and all its services."""
+    session = SessionLocal()
+    try:
+        host = session.query(Host).filter(Host.id == host_id).first()
+        if not host:
+            raise HTTPException(status_code=404, detail="Host not found")
+        session.delete(host)
+        session.commit()
+        return {"status": "success", "message": "Host deleted"}
+    finally:
+        session.close()
+
+
+class ServiceCreateSchema(BaseModel):
+    port: int
+    name: str
+    value: int = 50
+    protocol: int = 1 # 1=tcp, 2=udp
+    application: str = "ping"
+
+
+class ServiceUpdateSchema(BaseModel):
+    port: Optional[int] = None
+    name: Optional[str] = None
+    value: Optional[int] = None
+    protocol: Optional[int] = None
+    application: Optional[str] = None
+    status: Optional[int] = None
+
+
+@router.post("/api/admin/games/hosts/{host_id}/services", dependencies=[Depends(verify_admin_token)])
+def create_service(host_id: int, data: ServiceCreateSchema):
+    """Create a new service on a host."""
+    session = SessionLocal()
+    try:
+        host = session.query(Host).filter(Host.id == host_id).first()
+        if not host:
+            raise HTTPException(status_code=404, detail="Host not found")
+        
+        service = Service(
+            port=data.port,
+            name=data.name[:64],
+            value=data.value,
+            protocol=data.protocol,
+            application=data.application[:64],
+            host_id=host_id,
+            status=2 # offline/timeout by default
+        )
+        session.add(service)
+        session.commit()
+        session.refresh(service)
+        return {"status": "success", "service_id": service.id, "message": "Service created"}
+    finally:
+        session.close()
+
+
+@router.put("/api/admin/games/services/{service_id}", dependencies=[Depends(verify_admin_token)])
+def update_service(service_id: int, data: ServiceUpdateSchema):
+    """Update service details (port, points, name, status, etc.)."""
+    session = SessionLocal()
+    try:
+        service = session.query(Service).filter(Service.id == service_id).first()
+        if not service:
+            raise HTTPException(status_code=404, detail="Service not found")
+        for field, value in data.model_dump(exclude_unset=True).items():
+            if field == "name" or field == "application":
+                value = value[:64]
+            setattr(service, field, value)
+        session.commit()
+        return {"status": "success", "message": "Service updated"}
+    finally:
+        session.close()
+
+
+@router.delete("/api/admin/games/services/{service_id}", dependencies=[Depends(verify_admin_token)])
+def delete_service(service_id: int):
+    """Delete a service."""
+    session = SessionLocal()
+    try:
+        service = session.query(Service).filter(Service.id == service_id).first()
+        if not service:
+            raise HTTPException(status_code=404, detail="Service not found")
+        session.delete(service)
+        session.commit()
+        return {"status": "success", "message": "Service deleted"}
+    finally:
+        session.close()
+
+
+class TeamCreateSchema(BaseModel):
+    name: str
+    subnet: Optional[str] = ""
+    color: Optional[int] = 0
+    offensive: Optional[bool] = False
+    minimal: Optional[bool] = False
+    visible: Optional[bool] = True
+
+
+@router.post("/api/admin/games/{game_id}/teams", dependencies=[Depends(verify_admin_token)])
+def create_team(game_id: int, data: TeamCreateSchema):
+    """Manually add a team to a game (e.g. Red Team)."""
+    session = SessionLocal()
+    try:
+        game = session.query(Game).filter(Game.id == game_id).first()
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        
+        # Idempotency check: if team already exists, return success info
+        existing = session.query(GameTeam).filter(GameTeam.game_id == game_id, GameTeam.name == data.name).first()
+        if existing:
+            return {
+                "status": "success",
+                "team_id": existing.id,
+                "team_name": existing.name,
+                "token": existing.token,
+                "message": "Team already exists"
+            }
+
+        # Determine color
+        color = data.color if data.color else _team_color(data.name, data.name)
+        
+        team = GameTeam(
+            name=data.name,
+            subnet=data.subnet,
+            color=color,
+            offensive=data.offensive,
+            minimal=data.minimal,
+            visible=data.visible,
+            game_id=game_id
+        )
+        session.add(team)
+        session.commit()
+        session.refresh(team)
+        return {
+            "status": "success",
+            "team_id": team.id,
+            "team_name": team.name,
+            "token": team.token,
+            "message": "Team created successfully"
+        }
+    finally:
+        session.close()
+
+
+@router.delete("/api/admin/games/teams/{team_id}", dependencies=[Depends(verify_admin_token)])
+def delete_team(team_id: int):
+    """Delete a team and its associated hosts/services."""
+    session = SessionLocal()
+    try:
+        team = session.query(GameTeam).filter(GameTeam.id == team_id).first()
+        if not team:
+            raise HTTPException(status_code=404, detail="Team not found")
+        session.delete(team)
+        session.commit()
+        return {"status": "success", "message": "Team deleted"}
+    finally:
+        session.close()
+
+

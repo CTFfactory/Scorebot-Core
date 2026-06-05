@@ -8,6 +8,7 @@ from scorebot_core_lite.auth import verify_monitor_token
 router = APIRouter()
 
 @router.get("/api/jobs", dependencies=[Depends(verify_monitor_token)])
+@router.get("/api/job", dependencies=[Depends(verify_monitor_token)])
 def request_job():
     """Monitor requests a host scoring job."""
     session = SessionLocal()
@@ -53,7 +54,8 @@ def request_job():
     finally:
         session.close()
 
-@router.post("/api/jobs", dependencies=[Depends(verify_monitor_token)])
+@router.post("/api/jobs", status_code=202, dependencies=[Depends(verify_monitor_token)])
+@router.post("/api/job", status_code=202, dependencies=[Depends(verify_monitor_token)])
 async def submit_job(request: Request):
     """Monitor submits results of a host scoring job."""
     session = SessionLocal()
@@ -79,15 +81,16 @@ async def submit_job(request: Request):
             raise HTTPException(status_code=404, detail="Host not found")
 
         # Score the Host from job results
-        ping_sent = int(body.get("ping_sent", 1))
-        ping_respond = int(body.get("ping_respond", 0))
+        host_data = body.get("host", {})
+        ping_sent = int(host_data.get("ping_sent", 1))
+        ping_respond = int(host_data.get("ping_respond", 0))
 
         host.ping_last = int((ping_respond / ping_sent) * 100) if ping_sent > 0 else 0
         ping_ratio = host.ping_min if host.ping_min > 0 else (host.team.game.host_ping_ratio if host.team and host.team.game else 50)
         host.online = host.ping_last >= ping_ratio
 
         # Update services
-        job_services = body.get("services", [])
+        job_services = host_data.get("services", [])
         for service in host.services:
             if not host.online:
                 service.status = 2  # Timeout/Offline
@@ -97,8 +100,13 @@ async def submit_job(request: Request):
                 for js in job_services:
                     if service.port == int(js.get("port", 0)):
                         js_status = js.get("status", "timeout").lower()
-                        # Map to status int: 0=up/green, 1=down/red, 2=timeout, 3=refused, 4=yellow
-                        status_map = {"up": 0, "down": 1, "timeout": 2, "refused": 3, "yellow": 4, "green": 0}
+                        status_map = {
+                            "up": 0, "green": 0, "pass": 0,
+                            "down": 1, "red": 1, "invalid": 1, "reset": 1,
+                            "timeout": 2,
+                            "refused": 3,
+                            "yellow": 4
+                        }
                         service.status = status_map.get(js_status, 2)
 
                         # Update content validation score

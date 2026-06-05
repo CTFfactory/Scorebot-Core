@@ -158,6 +158,144 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        .btn-info { background-color: #0ea5e9; }
+        .btn-info:hover { box-shadow: 0 0 12px rgba(14, 165, 233, 0.4); }
+        .btn-success { background-color: var(--success-color); }
+        .btn-success:hover { box-shadow: 0 0 12px rgba(16, 185, 129, 0.4); }
+        .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; border-radius: 6px; }
+
+        .details-panel {
+            background: rgba(10, 15, 30, 0.95);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+            text-align: left;
+        }
+
+        @media (max-width: 992px) {
+            .details-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .parameters-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+
+        .parameters-form .form-group {
+            margin-bottom: 0.5rem;
+        }
+
+        .parameters-form label {
+            font-size: 0.75rem;
+            margin-bottom: 0.25rem;
+            color: #9ca3af;
+        }
+
+        .parameters-form input {
+            padding: 0.5rem;
+            font-size: 0.85rem;
+            background-color: rgba(0,0,0,0.3);
+        }
+
+        .details-section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 1rem;
+            color: #60a5fa;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .team-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .team-header-form {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .team-header-form input, .team-header-form select {
+            padding: 0.4rem;
+            font-size: 0.85rem;
+            width: auto;
+            flex-grow: 1;
+        }
+
+        .hosts-list {
+            margin-top: 1rem;
+            padding-left: 1rem;
+            border-left: 2px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .host-item {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.04);
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .host-header-form {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .host-header-form input {
+            padding: 0.35rem;
+            font-size: 0.8rem;
+            width: auto;
+            flex-grow: 1;
+        }
+
+        .services-list {
+            margin-top: 0.5rem;
+            padding-left: 1rem;
+            border-left: 2px dashed rgba(16, 185, 129, 0.3);
+        }
+
+        .service-item {
+            background: rgba(255,255,255,0.01);
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            padding: 0.4rem 0;
+            display: flex;
+            gap: 0.4rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .service-item input, .service-item select {
+            padding: 0.25rem 0.4rem;
+            font-size: 0.75rem;
+            width: auto;
+            flex-grow: 1;
+        }
     </style>
 </head>
 <body>
@@ -205,11 +343,20 @@
                                 <td>{{ game.scored or 'Never' }}</td>
                                 <td>
                                     {% if game.status == 0 or game.status == 2 %}
-                                    <button class="btn" onclick="controlGame({{ game.id }}, 'start')">Start</button>
+                                    <button class="btn btn-sm" onclick="controlGame({{ game.id }}, 'start')">Start</button>
                                     {% elif game.status == 1 %}
-                                    <button class="btn btn-warning" onclick="controlGame({{ game.id }}, 'pause')">Pause</button>
-                                    <button class="btn btn-danger" onclick="controlGame({{ game.id }}, 'stop')">Stop</button>
+                                    <button class="btn btn-warning btn-sm" onclick="controlGame({{ game.id }}, 'pause')">Pause</button>
+                                    <button class="btn btn-danger btn-sm" onclick="controlGame({{ game.id }}, 'stop')">Stop</button>
                                     {% endif %}
+                                    <button class="btn btn-info btn-sm" onclick="toggleDetails({{ game.id }})">Details</button>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteGame({{ game.id }})">Delete</button>
+                                </td>
+                            </tr>
+                            <tr id="details-row-{{ game.id }}" style="display: none;">
+                                <td colspan="5">
+                                    <div class="details-panel" id="details-container-{{ game.id }}">
+                                        Loading game details...
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -229,8 +376,11 @@
                         <div class="form-group">
                             <label for="gameMode">Mode</label>
                             <select id="gameMode">
-                                <option value="0">Default</option>
-                                <option value="1">Attack & Defend</option>
+                                <option value="0">Default (Red vs Blue)</option>
+                                <option value="1">Blue vs Blue</option>
+                                <option value="2">King of the Hill</option>
+                                <option value="3">Rush</option>
+                                <option value="4">Server Defence</option>
                             </select>
                         </div>
                         <button type="submit" class="btn" style="width: 100%;">Create Game</button>
@@ -274,6 +424,441 @@
                 location.reload();
             } else {
                 alert(`Failed to ${action} game`);
+            }
+        }
+
+        async function deleteGame(gameId) {
+            if (!confirm('Are you sure you want to delete this game? This will remove all teams, hosts, and services!')) {
+                return;
+            }
+            const res = await fetch(`/api/admin/games/${gameId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                }
+            });
+            if (res.ok) {
+                location.reload();
+            } else {
+                const err = await res.json();
+                alert(`Failed to delete game: ${err.detail || 'unknown error'}`);
+            }
+        }
+
+        async function toggleDetails(gameId) {
+            const row = document.getElementById(`details-row-${gameId}`);
+            if (row.style.display === 'table-row') {
+                row.style.display = 'none';
+                return;
+            }
+
+            row.style.display = 'table-row';
+            const container = document.getElementById(`details-container-${gameId}`);
+            container.innerHTML = `<div style="text-align: center; padding: 2rem;"><i class="fa fa-spinner fa-spin"></i> Loading configuration...</div>`;
+
+            try {
+                const res = await fetch(`/api/admin/games/${gameId}/details`, {
+                    headers: { 'X-Scorebot-Token': '{{ admin_token }}' }
+                });
+                if (!res.ok) throw new Error('Failed to load details');
+                const data = await res.json();
+
+                renderGameDetails(gameId, data);
+            } catch (err) {
+                container.innerHTML = `<div style="color: var(--danger-color); padding: 1rem;">Error: ${err.message}</div>`;
+            }
+        }
+
+        function renderGameDetails(gameId, game) {
+            const container = document.getElementById(`details-container-${gameId}`);
+            
+            let html = `
+                <div class="details-grid">
+                    <div>
+                        <h3 class="details-section-title">Game Parameters</h3>
+                        <form onsubmit="saveParameters(event, ${gameId})">
+                            <div class="parameters-form">
+                                <div class="form-group">
+                                    <label>Round Time (sec)</label>
+                                    <input type="number" name="round_time" value="${game.round_time || 15}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Job Timeout (sec)</label>
+                                    <input type="number" name="job_timeout" value="${game.job_timeout || 30}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Job Cleanup (sec)</label>
+                                    <input type="number" name="job_cleanup_time" value="${game.job_cleanup_time || 300}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Flag Stolen Rate</label>
+                                    <input type="number" name="flag_stolen_rate" value="${game.flag_stolen_rate || 0}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Flag Multiplier</label>
+                                    <input type="number" name="flag_captured_multiplier" value="${game.flag_captured_multiplier || 1}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Beacon Value</label>
+                                    <input type="number" name="beacon_value" value="${game.beacon_value || 10}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Ticket Cost</label>
+                                    <input type="number" name="ticket_cost" value="${game.ticket_cost || 5}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Ticket Max Score</label>
+                                    <input type="number" name="ticket_max_score" value="${game.ticket_max_score || 100}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Ticket Grace (sec)</label>
+                                    <input type="number" name="ticket_grace_period" value="${game.ticket_grace_period || 60}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Ticket Max Scoring</label>
+                                    <input type="number" name="ticket_max_scoring" value="${game.ticket_max_scoring || 3600}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Ping Ratio (%)</label>
+                                    <input type="number" name="host_ping_ratio" value="${game.host_ping_ratio || 50}" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-success" style="width: 100%; margin-top: 1rem;">Save Parameters</button>
+                        </form>
+                    </div>
+
+                    <div>
+                        <h3 class="details-section-title">
+                            <span>Teams, Hosts & Services</span>
+                            <button class="btn btn-sm btn-info" onclick="addTeamPrompt(${gameId})">+ Add Team</button>
+                        </h3>
+                        <div id="teams-list-container-${gameId}">
+            `;
+
+            if (game.teams.length === 0) {
+                html += `<p style="color: #9ca3af;">No teams found. Click "+ Add Team" above or import a game-definition.</p>`;
+            } else {
+                game.teams.forEach(team => {
+                    const colorHex = '#' + (team.color >>> 0).toString(16).padStart(6, '0');
+                    html += `
+                        <div class="team-card">
+                            <div style="font-size: 0.8rem; color: #9ca3af; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; background: rgba(0,0,0,0.25); padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                                <div><strong>Token:</strong> <code style="color: #60a5fa;">${team.token}</code></div>
+                                <div style="display: flex; gap: 0.25rem;">
+                                    <button type="button" class="btn btn-sm btn-info" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;" onclick="navigator.clipboard.writeText('${team.token}'); alert('Token copied!');">Copy</button>
+                                    <button type="button" class="btn btn-sm btn-danger" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;" onclick="deleteTeam(${team.id}, ${gameId})">Delete Team</button>
+                                </div>
+                            </div>
+                            <form onsubmit="saveTeam(event, ${team.id})" class="team-header-form">
+                                <strong style="color: ${colorHex}; min-width: 100px;">${team.name}</strong>
+                                <input type="text" name="subnet" value="${team.subnet || ''}" placeholder="Subnet e.g. 10.1.1.0/24" style="flex-grow: 2;">
+                                <input type="color" name="color_picker" value="${colorHex}" style="width: 40px; padding: 0;">
+                                <select name="offensive">
+                                    <option value="false" ${!team.offensive ? 'selected' : ''}>Defensive</option>
+                                    <option value="true" ${team.offensive ? 'selected' : ''}>Offensive</option>
+                                </select>
+                                <select name="minimal">
+                                    <option value="false" ${!team.minimal ? 'selected' : ''}>Standard</option>
+                                    <option value="true" ${team.minimal ? 'selected' : ''}>Minimal</option>
+                                </select>
+                                <select name="visible">
+                                    <option value="true" ${team.visible !== false ? 'selected' : ''}>Visible</option>
+                                    <option value="false" ${team.visible === false ? 'selected' : ''}>Hidden</option>
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-success">Save</button>
+                            </form>
+
+                            <div class="hosts-list">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <strong style="font-size: 0.9rem; color: #9ca3af;">Hosts</strong>
+                                    <button class="btn btn-sm btn-info" onclick="addHostPrompt(${team.id}, ${gameId})">+ Add Host</button>
+                                </div>
+                    `;
+
+                    team.hosts.forEach(host => {
+                        html += `
+                            <div class="host-item">
+                                <form onsubmit="saveHost(event, ${host.id}, ${gameId})" class="host-header-form">
+                                    <input type="text" name="fqdn" value="${host.fqdn}" placeholder="FQDN" required>
+                                    <input type="text" name="name" value="${host.name || ''}" placeholder="Short Name">
+                                    <input type="text" name="ip" value="${host.ip || ''}" placeholder="IP Address">
+                                    <select name="online">
+                                        <option value="true" ${host.online ? 'selected' : ''}>Online</option>
+                                        <option value="false" ${!host.online ? 'selected' : ''}>Offline</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-success">Save</button>
+                                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteHost(${host.id}, ${gameId})">Del</button>
+                                </form>
+
+                                <div class="services-list">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                        <span style="font-size: 0.8rem; color: #9ca3af;">Services</span>
+                                        <button class="btn btn-sm btn-info" style="padding: 0.1rem 0.3rem; font-size: 0.75rem;" onclick="addServicePrompt(${host.id}, ${gameId})">+ Add Service</button>
+                                    </div>
+                        `;
+
+                        host.services.forEach(svc => {
+                            html += `
+                                <div class="service-item">
+                                    <input type="number" name="port" value="${svc.port}" placeholder="Port" style="width: 70px;" required>
+                                    <input type="text" name="name" value="${svc.name}" placeholder="Name" required>
+                                    <input type="number" name="value" value="${svc.value}" placeholder="Points" style="width: 60px;" required>
+                                    <select name="protocol" style="width: 70px;">
+                                        <option value="1" ${svc.protocol === 1 ? 'selected' : ''}>TCP</option>
+                                        <option value="2" ${svc.protocol === 2 ? 'selected' : ''}>UDP</option>
+                                    </select>
+                                    <input type="text" name="application" value="${svc.application || 'ping'}" placeholder="Application" style="width: 90px;">
+                                    <select name="status" style="width: 100px;">
+                                        <option value="0" ${svc.status === 0 ? 'selected' : ''}>Up (Green)</option>
+                                        <option value="1" ${svc.status === 1 ? 'selected' : ''}>Down (Red)</option>
+                                        <option value="2" ${svc.status === 2 ? 'selected' : ''}>Timeout</option>
+                                        <option value="3" ${svc.status === 3 ? 'selected' : ''}>Refused</option>
+                                        <option value="4" ${svc.status === 4 ? 'selected' : ''}>Yellow</option>
+                                    </select>
+                                    <button type="button" class="btn btn-sm btn-success" style="padding: 0.15rem 0.35rem;" onclick="saveService(this, ${svc.id}, ${gameId})">Save</button>
+                                    <button type="button" class="btn btn-sm btn-danger" style="padding: 0.15rem 0.35rem;" onclick="deleteService(${svc.id}, ${gameId})">Del</button>
+                                </div>
+                            `;
+                        });
+
+                        html += `
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        // Action Handlers for Editing
+        async function saveParameters(e, gameId) {
+            e.preventDefault();
+            const form = e.target;
+            const data = {};
+            new FormData(form).forEach((val, key) => {
+                data[key] = parseInt(val);
+            });
+
+            const res = await fetch(`/api/admin/games/${gameId}/parameters`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                alert('Parameters updated successfully');
+                toggleDetails(gameId); // reload
+                toggleDetails(gameId);
+            } else {
+                alert('Failed to save parameters');
+            }
+        }
+
+        async function saveTeam(e, teamId) {
+            e.preventDefault();
+            const form = e.target;
+            const subnet = form.elements['subnet'].value;
+            const colorHex = form.elements['color_picker'].value;
+            const colorDecimal = parseInt(colorHex.replace('#', ''), 16);
+            const offensive = form.elements['offensive'].value === 'true';
+            const minimal = form.elements['minimal'].value === 'true';
+            const visible = form.elements['visible'].value === 'true';
+
+            const res = await fetch(`/api/admin/games/teams/${teamId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                },
+                body: JSON.stringify({ subnet, color: colorDecimal, offensive, minimal, visible })
+            });
+
+            if (res.ok) {
+                alert('Team updated');
+            } else {
+                alert('Failed to update team');
+            }
+        }
+
+        async function addTeamPrompt(gameId) {
+            const name = prompt("Enter team name (e.g. red):");
+            if (!name) return;
+            const subnet = prompt("Enter team subnet (optional, e.g. 10.1.1.0/24):") || "";
+            const colorHex = prompt("Enter color HEX (optional, e.g. #E53935):", "#E53935") || "#E53935";
+            const colorDecimal = parseInt(colorHex.replace('#', ''), 16);
+            const offensive = confirm("Is this team offensive (Red Team)?");
+            const visible = confirm("Should this team be visible on the scoreboard?");
+
+            const res = await fetch(`/api/admin/games/${gameId}/teams`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                },
+                body: JSON.stringify({ name, subnet, color: colorDecimal, offensive, minimal: false, visible })
+            });
+
+            if (res.ok) {
+                toggleDetails(gameId); // reload
+                toggleDetails(gameId);
+            } else {
+                alert('Failed to add team');
+            }
+        }
+
+        async function deleteTeam(teamId, gameId) {
+            if (!confirm('Are you sure you want to delete this team? This will remove all associated hosts and services!')) return;
+            const res = await fetch(`/api/admin/games/teams/${teamId}`, {
+                method: 'DELETE',
+                headers: { 'X-Scorebot-Token': '{{ admin_token }}' }
+            });
+            if (res.ok) {
+                toggleDetails(gameId); // reload
+                toggleDetails(gameId);
+            } else {
+                alert('Failed to delete team');
+            }
+        }
+
+        async function addHostPrompt(teamId, gameId) {
+            const fqdn = prompt("Enter FQDN for new host:");
+            if (!fqdn) return;
+            const name = prompt("Enter short name (optional, defaults to FQDN prefix):");
+            const ip = prompt("Enter IP Address (optional):") || "";
+
+            const res = await fetch(`/api/admin/games/teams/${teamId}/hosts`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                },
+                body: JSON.stringify({ fqdn, name, ip })
+            });
+
+            if (res.ok) {
+                toggleDetails(gameId); // refresh
+                toggleDetails(gameId);
+            } else {
+                alert('Failed to create host');
+            }
+        }
+
+        async function saveHost(e, hostId, gameId) {
+            e.preventDefault();
+            const form = e.target;
+            const fqdn = form.elements['fqdn'].value;
+            const name = form.elements['name'].value;
+            const ip = form.elements['ip'].value;
+            const online = form.elements['online'].value === 'true';
+
+            const res = await fetch(`/api/admin/games/hosts/${hostId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                },
+                body: JSON.stringify({ fqdn, name, ip, online })
+            });
+
+            if (res.ok) {
+                alert('Host saved');
+            } else {
+                alert('Failed to save host');
+            }
+        }
+
+        async function deleteHost(hostId, gameId) {
+            if (!confirm('Delete this host and all its services?')) return;
+            const res = await fetch(`/api/admin/games/hosts/${hostId}`, {
+                method: 'DELETE',
+                headers: { 'X-Scorebot-Token': '{{ admin_token }}' }
+            });
+            if (res.ok) {
+                toggleDetails(gameId);
+                toggleDetails(gameId);
+            } else {
+                alert('Failed to delete host');
+            }
+        }
+
+        async function addServicePrompt(hostId, gameId) {
+            const port = parseInt(prompt("Enter service port:"));
+            if (isNaN(port)) return;
+            const name = prompt("Enter service name (e.g. HTTP):");
+            if (!name) return;
+            const value = parseInt(prompt("Enter service points value (default 50):") || "50");
+            const protoStr = prompt("Enter protocol (TCP or UDP):", "TCP").toUpperCase();
+            const protocol = protoStr === "UDP" ? 2 : 1;
+            const application = prompt("Enter checker application type (default: ping):", "ping") || "ping";
+
+            const res = await fetch(`/api/admin/games/hosts/${hostId}/services`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                },
+                body: JSON.stringify({ port, name, value, protocol, application })
+            });
+
+            if (res.ok) {
+                toggleDetails(gameId);
+                toggleDetails(gameId);
+            } else {
+                alert('Failed to create service');
+            }
+        }
+
+        async function saveService(btn, serviceId, gameId) {
+            const container = btn.parentElement;
+            const port = parseInt(container.querySelector('[name="port"]').value);
+            const name = container.querySelector('[name="name"]').value;
+            const value = parseInt(container.querySelector('[name="value"]').value);
+            const protocol = parseInt(container.querySelector('[name="protocol"]').value);
+            const application = container.querySelector('[name="application"]').value;
+            const status = parseInt(container.querySelector('[name="status"]').value);
+
+            const res = await fetch(`/api/admin/games/services/${serviceId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                },
+                body: JSON.stringify({ port, name, value, protocol, application, status })
+            });
+
+            if (res.ok) {
+                alert('Service saved');
+            } else {
+                alert('Failed to save service');
+            }
+        }
+
+        async function deleteService(serviceId, gameId) {
+            if (!confirm('Delete this service?')) return;
+            const res = await fetch(`/api/admin/games/services/${serviceId}`, {
+                method: 'DELETE',
+                headers: { 'X-Scorebot-Token': '{{ admin_token }}' }
+            });
+            if (res.ok) {
+                toggleDetails(gameId);
+                toggleDetails(gameId);
+            } else {
+                alert('Failed to delete service');
             }
         }
     </script>

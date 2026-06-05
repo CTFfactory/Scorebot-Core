@@ -58,9 +58,9 @@ class Game(Base):
     def get_list_json(self):
         d = {"id": self.id, "mode": self.mode, "name": self.name, "status": self.status}
         if self.start:
-            d["start"] = self.start.isoformat()
+            d["start"] = self.start.isoformat() + "Z"
         if self.finish:
-            d["end"] = self.finish.isoformat()
+            d["end"] = self.finish.isoformat() + "Z"
         return d
 
     def get_json_scoreboard(self):
@@ -68,7 +68,7 @@ class Game(Base):
             "name": self.name,
             "message": "",  # Deprecated notification message
             "mode": self.mode,
-            "teams": [t.get_json_scoreboard() for t in self.teams],
+            "teams": [t.get_json_scoreboard() for t in self.teams if t.visible is not False],
             "events": [e.get_json_scoreboard() for e in self.events if e.timeout > datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)],
             "credit": "",
         }
@@ -87,6 +87,7 @@ class GameTeam(Base):
     store = Column(Integer, unique=True, nullable=True)
     game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), nullable=False)
     token = Column(String(36), unique=True, default=lambda: str(uuid.uuid4()))
+    visible = Column(Boolean, default=True)
 
     score_flags = Column(Integer, default=0)
     score_uptime = Column(Integer, default=0)
@@ -119,7 +120,9 @@ class GameTeam(Base):
 
     def get_json_scoreboard(self):
         # Calculate captured flags by this team (captured relationship mapping)
-        captured_flags_count = len([f for f in Flag.query_by_captured_team(self.id)])
+        from sqlalchemy.orm import object_session
+        session = object_session(self) or db_session
+        captured_flags_count = len(session.query(Flag).filter(Flag.captured_team_id == self.id).all())
         open_flags = len([f for f in self.flags if f.enabled and f.captured_team_id is None])
         lost_flags = len([f for f in self.flags if f.enabled and f.captured_team_id is not None])
         open_tickets = len([t for t in self.tickets if not t.closed])
@@ -173,6 +176,18 @@ class Host(Base):
             "id": self.id,
             "online": self.online,
             "services": [s.get_json_scoreboard() for s in self.services],
+        }
+
+    def get_json_job(self):
+        team_idx = (self.team.id - 1) if self.team else 0
+        dns_ip = f"100.64.{team_idx}.68"
+        return {
+            "host": {
+                "fqdn": self.fqdn,
+                "services": [s.get_json_job() for s in self.services],
+            },
+            "dns": [dns_ip],
+            "timeout": self.team.game.round_time if (self.team and self.team.game) else 15,
         }
 
 
@@ -249,11 +264,10 @@ class Flag(Base):
     team = relationship("GameTeam", foreign_keys=[team_id], back_populates="flags")
 
     @classmethod
-    def query_by_captured_team(cls, team_id):
+    def query_by_captured_team(cls, session, team_id):
         # Helper to query flags captured by a specific team ID
-        from sqlalchemy.orm import object_session
-        session = object_session(cls) or db_session
-        return session.query(cls).filter(cls.captured_team_id == team_id).all()
+        s = session or db_session
+        return s.query(cls).filter(cls.captured_team_id == team_id).all()
 
 
 class Job(Base):
