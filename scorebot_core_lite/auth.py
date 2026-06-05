@@ -22,13 +22,22 @@ from scorebot_core_lite import config
 
 logger = logging.getLogger("scorebot_core_lite.auth")
 
-async def verify_admin_token(
-    request: Request,
-    x_scorebot_token: Optional[str] = Header(None, alias="X-Scorebot-Token")
-):
+async def verify_admin_token(request: Request):
     client_ip = request.client.host if request.client else "unknown"
-    if not x_scorebot_token:
-        logger.warning("Admin auth failed from %s: X-Scorebot-Token header is missing", client_ip)
+    x_scorebot_token = request.headers.get("X-Scorebot-Token")
+    if x_scorebot_token is None:
+        x_scorebot_token = request.headers.get("x-scorebot-token")
+        
+    if x_scorebot_token is None or x_scorebot_token == "":
+        val_type = "None" if x_scorebot_token is None else "empty string"
+        headers_sent = dict(request.headers)
+        redacted_headers = {k: "..." if "token" in k.lower() or "auth" in k.lower() else v for k, v in headers_sent.items()}
+        logger.warning(
+            "Admin auth failed from %s: X-Scorebot-Token is %s. Received headers: %s",
+            client_ip,
+            val_type,
+            redacted_headers
+        )
         raise HTTPException(status_code=403, detail="Forbidden: Admin privilege required")
     if x_scorebot_token != config.API_TOKEN_ADMIN:
         logger.warning(
@@ -40,11 +49,9 @@ async def verify_admin_token(
         raise HTTPException(status_code=403, detail="Forbidden: Admin privilege required")
     return x_scorebot_token
 
-async def verify_monitor_token(
-    request: Request,
-    x_scorebot_token: Optional[str] = Header(None, alias="X-Scorebot-Token")
-):
+async def verify_monitor_token(request: Request):
     client_ip = request.client.host if request.client else "unknown"
+    x_scorebot_token = request.headers.get("X-Scorebot-Token")
     if not x_scorebot_token:
         logger.warning("Monitor auth failed from %s: X-Scorebot-Token header is missing", client_ip)
         raise HTTPException(status_code=403, detail="Forbidden: Monitor privilege required")
@@ -57,11 +64,9 @@ async def verify_monitor_token(
         raise HTTPException(status_code=403, detail="Forbidden: Monitor privilege required")
     return x_scorebot_token
 
-async def verify_cli_token(
-    request: Request,
-    x_scorebot_token: Optional[str] = Header(None, alias="X-Scorebot-Token")
-):
+async def verify_cli_token(request: Request):
     client_ip = request.client.host if request.client else "unknown"
+    x_scorebot_token = request.headers.get("X-Scorebot-Token")
     if not x_scorebot_token:
         logger.warning("CLI auth failed from %s: X-Scorebot-Token header is missing", client_ip)
         raise HTTPException(status_code=403, detail="Forbidden: CLI privilege required")
@@ -74,11 +79,9 @@ async def verify_cli_token(
         raise HTTPException(status_code=403, detail="Forbidden: CLI privilege required")
     return x_scorebot_token
 
-async def verify_store_token(
-    request: Request,
-    x_scorebot_token: Optional[str] = Header(None, alias="X-Scorebot-Token")
-):
+async def verify_store_token(request: Request):
     client_ip = request.client.host if request.client else "unknown"
+    x_scorebot_token = request.headers.get("X-Scorebot-Token")
     if not x_scorebot_token:
         logger.warning("Store auth failed from %s: X-Scorebot-Token header is missing", client_ip)
         raise HTTPException(status_code=403, detail="Forbidden: Store privilege required")
@@ -91,11 +94,9 @@ async def verify_store_token(
         raise HTTPException(status_code=403, detail="Forbidden: Store privilege required")
     return x_scorebot_token
 
-async def verify_ticket_token(
-    request: Request,
-    x_scorebot_token: Optional[str] = Header(None, alias="X-Scorebot-Token")
-):
+async def verify_ticket_token(request: Request):
     client_ip = request.client.host if request.client else "unknown"
+    x_scorebot_token = request.headers.get("X-Scorebot-Token")
     if not x_scorebot_token:
         logger.warning("Ticket auth failed from %s: X-Scorebot-Token header is missing", client_ip)
         raise HTTPException(status_code=403, detail="Forbidden: Ticket privilege required")
