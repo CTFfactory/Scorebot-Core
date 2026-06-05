@@ -105,13 +105,25 @@ def dashboard(request: Request):
     session = SessionLocal()
     try:
         games = session.query(Game).all()
-        return templates.TemplateResponse(
-            "dashboard.html",
-            {
-                "request": request,
-                "games": games,
-                "admin_token": config.API_TOKEN_ADMIN
-            }
-        )
+        import inspect
+        sig = inspect.signature(templates.TemplateResponse)
+        if "request" in sig.parameters:
+            return templates.TemplateResponse(
+                request=request,
+                name="dashboard.html",
+                context={
+                    "games": games,
+                    "admin_token": config.API_TOKEN_ADMIN
+                }
+            )
+        else:
+            return templates.TemplateResponse(
+                "dashboard.html",
+                {
+                    "request": request,
+                    "games": games,
+                    "admin_token": config.API_TOKEN_ADMIN
+                }
+            )
     finally:
         session.close()
