@@ -232,7 +232,26 @@ async def register_beacon_port(request: Request):
             raise HTTPException(status_code=403, detail="Team is not designated as offensive")
 
         # Verify or register service port on hosts (or mock it by adding service)
-        # For simplicity, register/open beacon port by returning success (or adding a service model entry)
+        host = session.query(Host).join(GameTeam).filter(GameTeam.game_id == team.game_id).first()
+        if not host:
+            raise HTTPException(status_code=400, detail="No hosts found in the game to register the service port")
+
+        existing_service = session.query(Service).filter(
+            Service.port == port_num,
+            Service.application == "beacon"
+        ).first()
+
+        if not existing_service:
+            new_service = Service(
+                port=port_num,
+                name=f"beacon_{port_num}",
+                application="beacon",
+                host_id=host.id,
+                value=0
+            )
+            session.add(new_service)
+            session.commit()
+
         return {
             "status": "success",
             "ip": config.BEACON_IP,
