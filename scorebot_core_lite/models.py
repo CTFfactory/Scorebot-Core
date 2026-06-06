@@ -102,6 +102,7 @@ class GameTeam(Base):
     purchases = relationship("Purchase", back_populates="team", cascade="all, delete-orphan")
     beacon_tokens = relationship("GameTeamBeaconToken", back_populates="team", cascade="all, delete-orphan")
     score_adjustments = relationship("ScoreAdjustment", back_populates="team", cascade="all, delete-orphan")
+    compromised_hosts = relationship("GameCompromiseHost", foreign_keys="[GameCompromiseHost.team_id]", back_populates="team", cascade="all, delete-orphan")
 
     def get_score(self):
         adjustment_sum = sum(adj.amount for adj in self.score_adjustments)
@@ -109,15 +110,13 @@ class GameTeam(Base):
 
     def get_beacons(self):
         beacons = []
-        for compromise in self.compromises:
-            if compromise.finish is None:
-                # Get the associated compromise hosts
-                for ch in compromise.hosts:
-                    beacons.append({
-                        "id": compromise.id,
-                        "team": compromise.attacker_team_id,
-                        "color": f"#{hex(compromise.attacker.color).replace('0x', '').zfill(6)}",
-                    })
+        for ch in self.compromised_hosts:
+            if ch.compromise.finish is None:
+                beacons.append({
+                    "id": ch.compromise.id,
+                    "team": ch.compromise.attacker_team_id,
+                    "color": f"#{hex(ch.compromise.attacker.color).replace('0x', '').zfill(6)}",
+                })
         return beacons
 
     def get_json_scoreboard(self):
@@ -356,7 +355,7 @@ class GameCompromiseHost(Base):
 
     compromise = relationship("GameCompromise", back_populates="hosts")
     host = relationship("Host")
-    team = relationship("GameTeam")
+    team = relationship("GameTeam", back_populates="compromised_hosts")
 
 class GameTeamBeaconToken(Base):
     __tablename__ = "game_team_beacon_tokens"
