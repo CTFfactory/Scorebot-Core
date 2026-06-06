@@ -115,6 +115,76 @@ def healthz():
         "scheduler_running": daemon.running
     }
 
+@app.get("/force-logout")
+def force_logout():
+    """Endpoint with basic auth challenge to clear browser cache."""
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Unauthorized",
+        headers={"WWW-Authenticate": "Basic"},
+    )
+
+@app.get("/logout", response_class=HTMLResponse)
+def logout():
+    """Logged out page."""
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Logged Out</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+        <style>
+            body {
+                background-color: #0b0f19;
+                color: #f3f4f6;
+                font-family: 'Outfit', sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                margin: 0;
+            }
+            .card {
+                background: rgba(22, 28, 45, 0.6);
+                backdrop-filter: blur(12px);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 16px;
+                padding: 2.5rem;
+                text-align: center;
+                box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            }
+            h1 {
+                background: linear-gradient(135deg, #60a5fa, #3b82f6);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                margin-top: 0;
+            }
+            a {
+                display: inline-block;
+                margin-top: 1.5rem;
+                background-color: #3b82f6;
+                color: white;
+                text-decoration: none;
+                padding: 0.75rem 1.5rem;
+                border-radius: 8px;
+                font-weight: 600;
+                transition: all 0.2s ease;
+            }
+            a:hover {
+                box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h1>Logged Out</h1>
+            <p>You have been successfully logged out.</p>
+            <a href="/">Log In Again</a>
+        </div>
+    </body>
+    </html>
+    """
+
 @app.get("/", response_class=HTMLResponse, dependencies=[Depends(verify_dashboard_auth)])
 def dashboard(request: Request):
     """Admin dashboard UI."""

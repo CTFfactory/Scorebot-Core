@@ -339,17 +339,27 @@ def _team_color(team_name: str, color_hint: str) -> int:
     This can always be overridden via the admin UI after import.
     """
     _palette = {
-        "blue":  0x1E88E5,   # Material Blue 600
         "gold":  0xFFB300,   # Material Amber 600
         "red":   0xE53935,   # Material Red 600
         "green": 0x43A047,   # Material Green 600
         "white": 0xEEEEEE,
         "black": 0x212121,
     }
+    if color_hint.lower() == "blue":
+        import hashlib
+        import colorsys
+        h_val = int(hashlib.md5(team_name.encode()).hexdigest(), 16)
+        h = 180 + (h_val % 81)  # 180 to 260 (cyan-blue-indigo)
+        s = 0.70 + (((h_val >> 8) % 21) / 100.0)  # 70% to 90%
+        l = 0.45 + (((h_val >> 16) % 16) / 100.0)  # 45% to 60%
+        r, g, b = colorsys.hls_to_rgb(h / 360.0, l, s)
+        return (int(r * 255) << 16) | (int(g * 255) << 8) | int(b * 255)
+
     if color_hint.lower() in _palette:
         return _palette[color_hint.lower()]
     # Deterministic fallback: hash team name to 24-bit color
-    return hash(team_name) & 0xFFFFFF
+    import hashlib
+    return int(hashlib.md5(team_name.encode()).hexdigest(), 16) & 0xFFFFFF
 
 
 # ---------------------------------------------------------------------------
@@ -427,6 +437,7 @@ def get_game_details(game_id: int):
             "ticket_reopen_multiplier": game.ticket_reopen_multiplier,
             "score_exchange_rate": game.score_exchange_rate,
             "host_ping_ratio": game.host_ping_ratio,
+            "zero_out_time": game.zero_out_time.isoformat() if game.zero_out_time else None,
             "teams": teams_list
         }
     finally:
@@ -720,6 +731,53 @@ def adjust_team_score(team_id: int, data: ScoreAdjustmentSchema):
         session.add(adj)
         session.commit()
         return {"status": "success", "message": "Score adjusted successfully"}
+    finally:
+        session.close()
+
+
+class ScheduleZeroOutSchema(BaseModel):
+    zero_out_time: Optional[str] = None  # ISO format string or None to cancel
+
+
+@router.post("/api/admin/games/{game_id}/zero-scores", dependencies=[Depends(verify_admin_token)])
+def zero_game_scores_endpoint(game_id: int):
+    """Immediately zero out scores for a game."""
+    session = SessionLocal()
+    try:
+        game = session.query(Game).filter(Game.id == game_id).first()
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        from scorebot_core_lite.scoring.engine import zero_game_scores
+        zero_game_scores(session, game_id)
+        return {"status": "success", "message": "All team scores successfully zeroed out"}
+    finally:
+        session.close()
+
+
+@router.post("/api/admin/games/{game_id}/schedule-zero-out", dependencies=[Depends(verify_admin_token)])
+def schedule_zero_out_endpoint(game_id: int, data: ScheduleZeroOutSchema):
+    """Schedule a score zero-out for a game."""
+    session = SessionLocal()
+    try:
+        game = session.query(Game).filter(Game.id == game_id).first()
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        
+        if data.zero_out_time:
+            try:
+                # Parse ISO format datetime
+                dt = datetime.datetime.fromisoformat(data.zero_out_time.replace("Z", "+00:00")).replace(tzinfo=None)
+                game.zero_out_time = dt
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=f"Invalid datetime format: {e}")
+        else:
+            game.zero_out_time = None
+        
+        session.commit()
+        return {
+            "status": "success", 
+            "message": f"Zero-out time scheduled to {game.zero_out_time}" if game.zero_out_time else "Zero-out schedule cancelled"
+        }
     finally:
         session.close()
 

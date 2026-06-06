@@ -51,6 +51,7 @@ class Game(Base):
     ticket_reopen_multiplier = Column(Integer, default=200)
     score_exchange_rate = Column(Integer, default=100)  # exchange rate * 100
     host_ping_ratio = Column(Integer, default=50)
+    zero_out_time = Column(DateTime, nullable=True)
 
     teams = relationship("GameTeam", back_populates="game", cascade="all, delete-orphan")
     events = relationship("GameEvent", back_populates="game", cascade="all, delete-orphan")
@@ -385,3 +386,8 @@ db_session = SessionLocal()
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    try:
+        with engine.begin() as conn:
+            conn.execute("ALTER TABLE games ADD COLUMN zero_out_time DATETIME")
+    except Exception:
+        pass

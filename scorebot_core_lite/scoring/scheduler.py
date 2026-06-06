@@ -27,9 +27,20 @@ class SchedulerDaemon(threading.Thread):
             now = time.time()
             session = None
             try:
+                session = SessionLocal()
+                # 0. Check scheduled zero-outs
+                utc_now = datetime.now(timezone.utc).replace(tzinfo=None)
+                from scorebot_core_lite.scoring.engine import zero_game_scores
+                games_to_zero = session.query(Game).filter(Game.zero_out_time != None).all()
+                for game in games_to_zero:
+                    if game.zero_out_time and utc_now >= game.zero_out_time:
+                        logger.info(f"Zeroing out scores for game {game.name} as scheduled zero_out_time {game.zero_out_time} was reached.")
+                        zero_game_scores(session, game.id)
+                        game.zero_out_time = None
+                session.commit()
+
                 # 1. Check scoring interval
                 if now - self.last_scoring >= config.SCORING_INTERVAL:
-                    session = SessionLocal()
                     running_games = session.query(Game).filter(Game.status == 1).all()
                     for game in running_games:
                         score_round(session, game.id)
@@ -37,8 +48,6 @@ class SchedulerDaemon(threading.Thread):
 
                 # 2. Check cleanup interval
                 if now - self.last_cleanup >= config.CLEANUP_INTERVAL:
-                    if not session:
-                        session = SessionLocal()
                     run_cleanup(session)
                     self.last_cleanup = now
 

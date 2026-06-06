@@ -305,8 +305,9 @@
                 <h1>Scorebot Core Lite</h1>
                 <p style="margin: 0; color: #9ca3af;">Administration Dashboard</p>
             </div>
-            <div>
+            <div style="display: flex; align-items: center; gap: 1rem;">
                 <span class="badge badge-running">Active</span>
+                <button class="btn btn-sm btn-danger" onclick="logout()">Logout</button>
             </div>
         </header>
 
@@ -525,6 +526,23 @@
                             </div>
                             <button type="submit" class="btn btn-sm btn-success" style="width: 100%; margin-top: 1rem;">Save Parameters</button>
                         </form>
+                        
+                        <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                            <h4 style="margin-top: 0; margin-bottom: 0.75rem; color: #60a5fa; font-size: 1rem;">Score Reset Control</h4>
+                            <div style="display: flex; gap: 0.75rem; flex-direction: column;">
+                                <button type="button" class="btn btn-sm btn-danger" onclick="zeroScores(${gameId})" style="width: 100%;">Zero Out All Scores Now</button>
+                                
+                                <div class="form-group" style="margin-top: 0.5rem; margin-bottom: 0;">
+                                    <label>Schedule Zero-Out Time</label>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <input type="datetime-local" id="zero-out-time-${gameId}" value="${game.zero_out_time ? game.zero_out_time.substring(0, 16) : ''}" style="padding: 0.4rem; font-size: 0.8rem; flex-grow: 1;">
+                                        <button type="button" class="btn btn-sm btn-info" onclick="scheduleZeroOut(${gameId})">Set</button>
+                                        <button type="button" class="btn btn-sm btn-warning" onclick="cancelZeroOut(${gameId})">Cancel</button>
+                                    </div>
+                                    ${game.zero_out_time ? `<div style="font-size: 0.75rem; color: #fbbf24; margin-top: 0.4rem;">Scheduled: ${new Date(game.zero_out_time + 'Z').toLocaleString()}</div>` : ''}
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div>
@@ -911,6 +929,75 @@
                 const err = await res.json();
                 alert(`Failed to adjust score: ${err.detail || 'unknown error'}`);
             }
+        }
+
+        async function zeroScores(gameId) {
+            if (!confirm("Are you sure you want to ZERO out all scores for this game? This will reset all team scores and clear adjustments!")) return;
+            const res = await fetch(`/api/admin/games/${gameId}/zero-scores`, {
+                method: 'POST',
+                headers: { 'X-Scorebot-Token': '{{ admin_token }}' }
+            });
+            if (res.ok) {
+                alert("Scores zeroed out successfully");
+                toggleDetails(gameId); // reload details
+                toggleDetails(gameId);
+            } else {
+                alert("Failed to zero out scores");
+            }
+        }
+
+        async function scheduleZeroOut(gameId) {
+            const inputVal = document.getElementById(`zero-out-time-${gameId}`).value;
+            if (!inputVal) {
+                alert("Please select a date and time first.");
+                return;
+            }
+            // Convert local time string to ISO with local timezone offset or convert to UTC
+            const localDate = new Date(inputVal);
+            const isoString = localDate.toISOString(); // returns UTC ISO format
+            const res = await fetch(`/api/admin/games/${gameId}/schedule-zero-out`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                },
+                body: JSON.stringify({ zero_out_time: isoString })
+            });
+            if (res.ok) {
+                alert("Zero-out time scheduled successfully");
+                toggleDetails(gameId); // reload details
+                toggleDetails(gameId);
+            } else {
+                alert("Failed to schedule zero-out");
+            }
+        }
+
+        async function cancelZeroOut(gameId) {
+            if (!confirm("Are you sure you want to cancel the scheduled zero-out?")) return;
+            const res = await fetch(`/api/admin/games/${gameId}/schedule-zero-out`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                },
+                body: JSON.stringify({ zero_out_time: null })
+            });
+            if (res.ok) {
+                alert("Scheduled zero-out cancelled successfully");
+                toggleDetails(gameId); // reload details
+                toggleDetails(gameId);
+            } else {
+                alert("Failed to cancel scheduled zero-out");
+            }
+        }
+
+        async function logout() {
+            var xmlhttp = new XMLHttpRequest();
+            xmlhttp.open("GET", "/force-logout", true, "logout", "logout");
+            xmlhttp.send();
+            setTimeout(function() {
+                window.location.href = "/logout";
+            }, 300);
         }
     </script>
 </body>

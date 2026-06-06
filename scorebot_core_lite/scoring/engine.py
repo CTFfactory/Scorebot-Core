@@ -89,3 +89,18 @@ def score_round(session, game_id: int):
     game.scored = now
     session.commit()
     logger.info(f"Finished scoring round for game {game.name}")
+
+
+def zero_game_scores(session, game_id: int):
+    """Zeroes out all score fields and adjustments for all teams in a game."""
+    from scorebot_core_lite.models import GameTeam, ScoreAdjustment
+    teams = session.query(GameTeam).filter(GameTeam.game_id == game_id).all()
+    for team in teams:
+        team.score_flags = 0
+        team.score_uptime = 0
+        team.score_tickets = 0
+        team.score_beacons = 0
+        # Delete all score adjustments for the team
+        session.query(ScoreAdjustment).filter(ScoreAdjustment.team_id == team.id).delete()
+    session.commit()
+    logger.info(f"Scores zeroed out for game ID {game_id}")
