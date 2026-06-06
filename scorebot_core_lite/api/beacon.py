@@ -8,6 +8,8 @@ from scorebot_core_lite.auth import verify_cli_token
 from scorebot_core_lite.scoring.notifications import send_notification
 from netaddr import IPNetwork, IPAddress
 
+from scorebot_core_lite import config
+
 router = APIRouter()
 
 @router.post("/api/register", status_code=201, dependencies=[Depends(verify_cli_token)])
@@ -27,6 +29,8 @@ async def register_beacon(request: Request):
         team = session.query(GameTeam).filter(GameTeam.token == team_token).first()
         if not team:
             raise HTTPException(status_code=404, detail="Team not found")
+        if not team.offensive:
+            raise HTTPException(status_code=403, detail="Team is not designated as offensive")
 
         # Create new beacon token
         new_token = str(uuid.uuid4())
@@ -60,6 +64,8 @@ async def checkin_beacon(request: Request):
             raise HTTPException(status_code=403, detail="Invalid Beacon Token")
 
         attacker_team = bt.team
+        if not attacker_team.offensive:
+            raise HTTPException(status_code=403, detail="Team is not designated as offensive")
         if attacker_team.game.status != 1:
             raise HTTPException(status_code=403, detail="Game is not running")
 
@@ -222,10 +228,16 @@ async def register_beacon_port(request: Request):
         team = session.query(GameTeam).filter(GameTeam.token == team_token).first()
         if not team or team.game.status != 1:
             raise HTTPException(status_code=403, detail="Game not running or invalid team")
+        if not team.offensive:
+            raise HTTPException(status_code=403, detail="Team is not designated as offensive")
 
         # Verify or register service port on hosts (or mock it by adding service)
         # For simplicity, register/open beacon port by returning success (or adding a service model entry)
-        return {"status": "success", "message": f"Port {port_num} registered"}
+        return {
+            "status": "success",
+            "ip": config.BEACON_IP,
+            "message": f"Port {port_num} registered. Send beacons to {config.BEACON_IP}:{port_num}"
+        }
     finally:
         session.close()
 
