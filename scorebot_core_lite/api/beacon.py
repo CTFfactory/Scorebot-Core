@@ -10,7 +10,7 @@ from netaddr import IPNetwork, IPAddress
 
 router = APIRouter()
 
-@router.post("/api/register", dependencies=[Depends(verify_cli_token)])
+@router.post("/api/register", status_code=201, dependencies=[Depends(verify_cli_token)])
 async def register_beacon(request: Request):
     """Register a new beacon token for a team."""
     session = SessionLocal()
@@ -228,3 +228,27 @@ async def register_beacon_port(request: Request):
         return {"status": "success", "message": f"Port {port_num} registered"}
     finally:
         session.close()
+
+# Legacy Compatibility Endpoints
+@router.post("/api/register/", status_code=201, dependencies=[Depends(verify_cli_token)])
+async def legacy_register_beacon(request: Request):
+    """Legacy endpoint for registering a new beacon token for a team."""
+    return await register_beacon(request)
+
+@router.post("/api/beacon", dependencies=[Depends(verify_cli_token)])
+@router.post("/api/beacon/", dependencies=[Depends(verify_cli_token)])
+async def legacy_checkin_beacon(request: Request):
+    """Legacy endpoint for checking in a beacon or establishing a new compromise."""
+    return await checkin_beacon(request)
+
+@router.post("/api/beacon/port", status_code=201, dependencies=[Depends(verify_cli_token)])
+@router.post("/api/beacon/port/", status_code=201, dependencies=[Depends(verify_cli_token)])
+async def legacy_register_beacon_port(request: Request):
+    """Legacy endpoint for registering a new beacon port for a team in running game."""
+    return await register_beacon_port(request)
+
+@router.get("/api/beacon/port", dependencies=[Depends(verify_cli_token)])
+@router.get("/api/beacon/port/", dependencies=[Depends(verify_cli_token)])
+def legacy_get_beacon_ports():
+    """Legacy endpoint to retrieve list of open beacon ports in running games."""
+    return get_beacon_ports()

@@ -87,3 +87,10 @@ async def capture_flag(request: Request):
         return {"status": "success", "message": "Flag captured"}
     finally:
         session.close()
+
+# Legacy Compatibility Endpoints
+@router.post("/api/flag", dependencies=[Depends(verify_cli_token)])
+@router.post("/api/flag/", dependencies=[Depends(verify_cli_token)])
+async def legacy_capture_flag(request: Request):
+    """Legacy endpoint for submitting a captured flag."""
+    return await capture_flag(request)
