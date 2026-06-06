@@ -568,6 +568,23 @@
                                 <button type="submit" class="btn btn-sm btn-success">Save</button>
                             </form>
 
+                            <div style="margin: 0.5rem 0; padding: 0.5rem; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid var(--border-color);">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div><strong>Current Score:</strong> <span style="font-size: 1.1rem; color: #10b981; font-weight: 600;">${team.score || 0}</span></div>
+                                    <button type="button" class="btn btn-sm btn-info" onclick="adjustScorePrompt(${team.id}, '${team.name.replace(/'/g, "\\'")}', ${gameId})">Modify Score</button>
+                                </div>
+                                ${team.score_adjustments && team.score_adjustments.length > 0 ? `
+                                    <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #9ca3af; border-top: 1px solid var(--border-color); padding-top: 0.5rem;">
+                                        <div style="font-weight: 600; margin-bottom: 0.25rem;">Adjustments History:</div>
+                                        <ul style="margin: 0; padding-left: 1.25rem; max-height: 100px; overflow-y: auto;">
+                                            ${team.score_adjustments.map(adj => `
+                                                <li><strong>${adj.amount > 0 ? '+' : ''}${adj.amount}</strong>: ${adj.reason || 'No reason'} <span style="font-size: 0.7rem; color: #6b7280;">(${new Date(adj.timestamp).toLocaleString()})</span></li>
+                                            `).join('')}
+                                        </ul>
+                                    </div>
+                                ` : ''}
+                            </div>
+
                             <div class="hosts-list">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                                     <strong style="font-size: 0.9rem; color: #9ca3af;">Hosts</strong>
@@ -859,6 +876,40 @@
                 toggleDetails(gameId);
             } else {
                 alert('Failed to delete service');
+            }
+        }
+
+        async function adjustScorePrompt(teamId, teamName, gameId) {
+            const amountStr = prompt(`Enter score adjustment for team "${teamName}" (positive/negative integer, e.g. 100 or -50):`);
+            if (amountStr === null) return;
+            const amount = parseInt(amountStr);
+            if (isNaN(amount)) {
+                alert("Invalid amount. Please enter a valid integer.");
+                return;
+            }
+            const reason = prompt(`Enter reason for adjusting score by ${amount}:`);
+            if (reason === null) return;
+            if (!reason.trim()) {
+                alert("A reason is required.");
+                return;
+            }
+            
+            const res = await fetch(`/api/admin/games/teams/${teamId}/adjust-score`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                },
+                body: JSON.stringify({ amount, reason })
+            });
+            
+            if (res.ok) {
+                alert("Score adjusted successfully");
+                toggleDetails(gameId); // refresh
+                toggleDetails(gameId);
+            } else {
+                const err = await res.json();
+                alert(`Failed to adjust score: ${err.detail || 'unknown error'}`);
             }
         }
     </script>

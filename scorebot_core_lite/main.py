@@ -18,14 +18,30 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request, Depends, status, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import secrets
 
 from scorebot_core_lite import config
 from scorebot_core_lite.models import init_db, SessionLocal, Game
 from scorebot_core_lite.scoring.scheduler import SchedulerDaemon
+
+# HTTP Basic Auth for Dashboard
+security = HTTPBasic()
+
+def verify_dashboard_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = secrets.compare_digest(credentials.username, "admin")
+    correct_password = secrets.compare_digest(credentials.password, config.API_TOKEN_ADMIN or "admin")
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 # Routers
 from scorebot_core_lite.api.scoreboard import router as scoreboard_router
@@ -99,7 +115,7 @@ def healthz():
         "scheduler_running": daemon.running
     }
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse, dependencies=[Depends(verify_dashboard_auth)])
 def dashboard(request: Request):
     """Admin dashboard UI."""
     session = SessionLocal()

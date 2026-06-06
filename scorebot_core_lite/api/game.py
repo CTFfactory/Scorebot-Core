@@ -24,7 +24,7 @@ from pydantic import BaseModel
 
 from scorebot_core_lite import config, ingest
 from scorebot_core_lite.auth import verify_admin_token
-from scorebot_core_lite.models import Game, GameTeam, Host, Service, SessionLocal
+from scorebot_core_lite.models import Game, GameTeam, Host, Service, SessionLocal, ScoreAdjustment
 
 router = APIRouter()
 logger = logging.getLogger("scorebot_core_lite.api.game")
@@ -397,6 +397,15 @@ def get_game_details(game_id: int):
                 "minimal": team.minimal,
                 "token": team.token,
                 "visible": team.visible is not False,
+                "score": team.get_score(),
+                "score_adjustments": [
+                    {
+                        "id": adj.id,
+                        "amount": adj.amount,
+                        "reason": adj.reason,
+                        "timestamp": adj.timestamp.isoformat() if adj.timestamp else None
+                    } for adj in team.score_adjustments
+                ],
                 "hosts": hosts_list
             })
             
@@ -685,6 +694,32 @@ def delete_team(team_id: int):
         session.delete(team)
         session.commit()
         return {"status": "success", "message": "Team deleted"}
+    finally:
+        session.close()
+
+
+class ScoreAdjustmentSchema(BaseModel):
+    amount: int
+    reason: str
+
+
+@router.post("/api/admin/games/teams/{team_id}/adjust-score", dependencies=[Depends(verify_admin_token)])
+def adjust_team_score(team_id: int, data: ScoreAdjustmentSchema):
+    """Adjust a team's score with a specified reason."""
+    session = SessionLocal()
+    try:
+        team = session.query(GameTeam).filter(GameTeam.id == team_id).first()
+        if not team:
+            raise HTTPException(status_code=404, detail="Team not found")
+        
+        adj = ScoreAdjustment(
+            team_id=team_id,
+            amount=data.amount,
+            reason=data.reason
+        )
+        session.add(adj)
+        session.commit()
+        return {"status": "success", "message": "Score adjusted successfully"}
     finally:
         session.close()
 

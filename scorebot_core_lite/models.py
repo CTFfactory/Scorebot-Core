@@ -101,9 +101,11 @@ class GameTeam(Base):
     tickets = relationship("GameTicket", back_populates="team", cascade="all, delete-orphan")
     purchases = relationship("Purchase", back_populates="team", cascade="all, delete-orphan")
     beacon_tokens = relationship("GameTeamBeaconToken", back_populates="team", cascade="all, delete-orphan")
+    score_adjustments = relationship("ScoreAdjustment", back_populates="team", cascade="all, delete-orphan")
 
     def get_score(self):
-        return self.score_flags + self.score_uptime + self.score_tickets + self.score_beacons
+        adjustment_sum = sum(adj.amount for adj in self.score_adjustments)
+        return self.score_flags + self.score_uptime + self.score_tickets + self.score_beacons + adjustment_sum
 
     def get_beacons(self):
         beacons = []
@@ -175,7 +177,7 @@ class Host(Base):
             "name": self.name or (self.fqdn.split(".")[0] if "." in self.fqdn else self.fqdn),
             "id": self.id,
             "online": self.online,
-            "services": [s.get_json_scoreboard() for s in self.services],
+            "services": [s.get_json_scoreboard() for s in self.services if s.application.lower() != "beacon"],
         }
 
     def get_json_job(self):
@@ -354,6 +356,7 @@ class GameCompromiseHost(Base):
 
     compromise = relationship("GameCompromise", back_populates="hosts")
     host = relationship("Host")
+    team = relationship("GameTeam")
 
 class GameTeamBeaconToken(Base):
     __tablename__ = "game_team_beacon_tokens"
@@ -363,6 +366,18 @@ class GameTeamBeaconToken(Base):
     token = Column(String(36), unique=True, default=lambda: str(uuid.uuid4()))
 
     team = relationship("GameTeam", back_populates="beacon_tokens")
+
+
+class ScoreAdjustment(Base):
+    __tablename__ = "score_adjustments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="CASCADE"), nullable=False)
+    amount = Column(Integer, nullable=False)
+    reason = Column(String(500), nullable=True)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+    team = relationship("GameTeam", back_populates="score_adjustments")
 
 
 engine = create_engine(config.DATABASE_URL, connect_args={"check_same_thread": False} if config.DATABASE_URL.startswith("sqlite") else {})
