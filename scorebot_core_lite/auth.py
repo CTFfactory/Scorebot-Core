@@ -22,18 +22,23 @@ from scorebot_core_lite import config
 
 logger = logging.getLogger("scorebot_core_lite.auth")
 
+def _get_token(request: Request) -> Optional[str]:
+    # Check X-Scorebot-Token first (case-insensitive checking via dict/Starlette handles most, but we check explicitly too)
+    for header_name in ("X-Scorebot-Token", "x-scorebot-token", "SBE-AUTH", "sbe-auth"):
+        token = request.headers.get(header_name)
+        if token:
+            return token
+    return None
+
 async def verify_admin_token(request: Request):
     client_ip = request.client.host if request.client else "unknown"
-    x_scorebot_token = request.headers.get("X-Scorebot-Token")
-    if x_scorebot_token is None:
-        x_scorebot_token = request.headers.get("x-scorebot-token")
-        
+    x_scorebot_token = _get_token(request)
     if x_scorebot_token is None or x_scorebot_token == "":
         val_type = "None" if x_scorebot_token is None else "empty string"
         headers_sent = dict(request.headers)
         redacted_headers = {k: "..." if "token" in k.lower() or "auth" in k.lower() else v for k, v in headers_sent.items()}
         logger.warning(
-            "Admin auth failed from %s: X-Scorebot-Token is %s. Received headers: %s",
+            "Admin auth failed from %s: X-Scorebot-Token/SBE-AUTH is %s. Received headers: %s",
             client_ip,
             val_type,
             redacted_headers
@@ -51,13 +56,7 @@ async def verify_admin_token(request: Request):
 
 async def verify_monitor_token(request: Request):
     client_ip = request.client.host if request.client else "unknown"
-    x_scorebot_token = request.headers.get("X-Scorebot-Token")
-    if not x_scorebot_token:
-        x_scorebot_token = request.headers.get("SBE-AUTH")
-    if not x_scorebot_token:
-        x_scorebot_token = request.headers.get("sbe-auth")
-    if not x_scorebot_token:
-        x_scorebot_token = request.headers.get("x-scorebot-token")
+    x_scorebot_token = _get_token(request)
     if not x_scorebot_token:
         logger.warning("Monitor auth failed from %s: X-Scorebot-Token / SBE-AUTH header is missing", client_ip)
         raise HTTPException(status_code=403, detail="Forbidden: Monitor privilege required")
@@ -72,9 +71,9 @@ async def verify_monitor_token(request: Request):
 
 async def verify_cli_token(request: Request):
     client_ip = request.client.host if request.client else "unknown"
-    x_scorebot_token = request.headers.get("X-Scorebot-Token")
+    x_scorebot_token = _get_token(request)
     if not x_scorebot_token:
-        logger.warning("CLI auth failed from %s: X-Scorebot-Token header is missing", client_ip)
+        logger.warning("CLI auth failed from %s: X-Scorebot-Token / SBE-AUTH header is missing", client_ip)
         raise HTTPException(status_code=403, detail="Forbidden: CLI privilege required")
     if x_scorebot_token not in (config.API_TOKEN_CLI, config.API_TOKEN_ADMIN):
         logger.warning(
@@ -87,9 +86,9 @@ async def verify_cli_token(request: Request):
 
 async def verify_store_token(request: Request):
     client_ip = request.client.host if request.client else "unknown"
-    x_scorebot_token = request.headers.get("X-Scorebot-Token")
+    x_scorebot_token = _get_token(request)
     if not x_scorebot_token:
-        logger.warning("Store auth failed from %s: X-Scorebot-Token header is missing", client_ip)
+        logger.warning("Store auth failed from %s: X-Scorebot-Token / SBE-AUTH header is missing", client_ip)
         raise HTTPException(status_code=403, detail="Forbidden: Store privilege required")
     if x_scorebot_token not in (config.API_TOKEN_STORE, config.API_TOKEN_ADMIN):
         logger.warning(
@@ -102,9 +101,9 @@ async def verify_store_token(request: Request):
 
 async def verify_ticket_token(request: Request):
     client_ip = request.client.host if request.client else "unknown"
-    x_scorebot_token = request.headers.get("X-Scorebot-Token")
+    x_scorebot_token = _get_token(request)
     if not x_scorebot_token:
-        logger.warning("Ticket auth failed from %s: X-Scorebot-Token header is missing", client_ip)
+        logger.warning("Ticket auth failed from %s: X-Scorebot-Token / SBE-AUTH header is missing", client_ip)
         raise HTTPException(status_code=403, detail="Forbidden: Ticket privilege required")
     if x_scorebot_token not in (config.API_TOKEN_TICKET, config.API_TOKEN_ADMIN):
         logger.warning(
