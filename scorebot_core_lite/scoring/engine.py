@@ -69,7 +69,9 @@ def score_round(session, game_id: int):
             victim_team = ch.team
             if victim_team:
                 victim_team.score_beacons -= game.beacon_value
-                logger.debug(f"Victim Team {victim_team.name} deducted {game.beacon_value} points due to active beacon by Attacker Team {compromise.attacker.name} on host {ch.ip}")
+                # Award points to the attacker team
+                compromise.attacker.score_beacons += game.beacon_value
+                logger.debug(f"Attacker Team {compromise.attacker.name} scored +{game.beacon_value} and Victim Team {victim_team.name} deducted {game.beacon_value} points due to active beacon on host {ch.ip}")
 
     # 3. Score open tickets
     for team in game.teams:
