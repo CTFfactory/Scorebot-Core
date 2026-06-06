@@ -87,6 +87,32 @@ def read_config(config):
         slogger.debug("Error while reading config file: {}".format(e))
         sys.exit(1)
 
+
+def setup_ip(ip):
+    try:
+        import subprocess
+        addrs = subprocess.check_output("ip addr show", shell=True).decode()
+        if ip in addrs:
+            slogger.info("IP {} is already configured.".format(ip))
+            return
+        
+        route_out = subprocess.check_output("ip route", shell=True).decode()
+        dev = None
+        for line in route_out.splitlines():
+            if "default via" in line:
+                parts = line.split()
+                if "dev" in parts:
+                    dev = parts[parts.index("dev") + 1]
+                    break
+        if not dev:
+            dev = "ens18"
+            
+        slogger.info("Adding IP {}/26 to interface {}...".format(ip, dev))
+        subprocess.run("ip addr add {}/26 dev {}".format(ip, dev), shell=True, check=True)
+    except Exception as e:
+        slogger.error("Failed to setup IP address: {}".format(e))
+
+
 if __name__ == "__main__":
     # setup logging
     slogger = logging.getLogger(__file__)
@@ -103,10 +129,21 @@ if __name__ == "__main__":
     parser.add_argument('--config', help="config to use instead of command line arguments")
     args = parser.parse_args()
 
+    beacon_ip = os.getenv("BEACON_IP")
+
     if args.config:
         config = read_config(args.config)
         auth_key = config['key']
         api = config['api']
+        beacon_ip = os.getenv("BEACON_IP", config.get("beacon_ip"))
+        
+        if not beacon_ip:
+            try:
+                import socket
+                beacon_ip = socket.gethostbyname(socket.gethostname())
+            except Exception:
+                beacon_ip = "127.0.0.1"
+                
         try:
             logtype = config["logtype"]
         except KeyError as e:
@@ -136,7 +173,8 @@ if __name__ == "__main__":
         parser.print_help()
         sys.exit(3)
 
-    HOST = "0.0.0.0"
+    setup_ip(beacon_ip)
+    HOST = beacon_ip
     ports = dict()
     pid = None
     oldports = []
