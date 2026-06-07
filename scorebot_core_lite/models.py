@@ -387,7 +387,8 @@ db_session = SessionLocal()
 def init_db():
     Base.metadata.create_all(bind=engine)
     try:
+        from sqlalchemy import text
         with engine.begin() as conn:
-            conn.execute("ALTER TABLE games ADD COLUMN zero_out_time DATETIME")
+            conn.execute(text("ALTER TABLE games ADD COLUMN zero_out_time DATETIME"))
     except Exception:
         pass
