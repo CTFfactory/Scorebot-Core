@@ -18,7 +18,7 @@
 import math
 import datetime
 import logging
-from scorebot_core_lite.models import Game, GameTeam, Host, Service, Content, GameCompromise, GameCompromiseHost, GameTicket
+from scorebot_core_lite.models import Game, GameTeam, Host, Service, Content, GameCompromise, GameCompromiseHost, GameTicket, ScoreAudit, ScoreHistory
 
 logger = logging.getLogger("scorebot_core_lite.scoring.engine")
 
@@ -52,6 +52,12 @@ def score_round(session, game_id: int):
 
             if host_score > 0:
                 team.score_uptime += host_score
+                session.add(ScoreAudit(
+                    team_id=team.id,
+                    source="UPTIME",
+                    amount=host_score,
+                    description=f"Uptime scored for {host.fqdn}"
+                ))
                 logger.debug(f"Team {team.name} Host {host.fqdn} scored +{host_score} uptime points")
             host.scored = now
 
@@ -69,8 +75,20 @@ def score_round(session, game_id: int):
             victim_team = ch.team
             if victim_team:
                 victim_team.score_beacons -= game.beacon_value
+                session.add(ScoreAudit(
+                    team_id=victim_team.id,
+                    source="BEACON-VICTIM",
+                    amount=-game.beacon_value,
+                    description=f"Compromised by {compromise.attacker.name} on {ch.ip}"
+                ))
                 # Award points to the attacker team
                 compromise.attacker.score_beacons += game.beacon_value
+                session.add(ScoreAudit(
+                    team_id=compromise.attacker.id,
+                    source="BEACON-ATTACKER",
+                    amount=game.beacon_value,
+                    description=f"Compromised {victim_team.name} on {ch.ip}"
+                ))
                 logger.debug(f"Attacker Team {compromise.attacker.name} scored +{game.beacon_value} and Victim Team {victim_team.name} deducted {game.beacon_value} points due to active beacon on host {ch.ip}")
 
     # 3. Score open tickets
@@ -84,7 +102,25 @@ def score_round(session, game_id: int):
                     if ticket.total < game.ticket_max_score:
                         ticket.total += game.ticket_cost
                         team.score_tickets -= game.ticket_cost
+                        session.add(ScoreAudit(
+                            team_id=team.id,
+                            source="TICKET-OPEN",
+                            amount=-game.ticket_cost,
+                            description=f"Deduction for open ticket {ticket.name}"
+                        ))
                         logger.debug(f"Team {team.name} Ticket {ticket.name} scored: ticket total cost={ticket.total}, team score ticket deduction={game.ticket_cost}")
+
+    # 4. Take ScoreHistory Snapshots
+    for team in game.teams:
+        session.add(ScoreHistory(
+            team_id=team.id,
+            game_id=game.id,
+            score_flags=team.score_flags,
+            score_uptime=team.score_uptime,
+            score_tickets=team.score_tickets,
+            score_beacons=team.score_beacons,
+            total_score=team.get_score()
+        ))
 
     game.scored = now
     session.commit()

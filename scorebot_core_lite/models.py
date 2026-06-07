@@ -380,6 +380,35 @@ class ScoreAdjustment(Base):
     team = relationship("GameTeam", back_populates="score_adjustments")
 
 
+class ScoreAudit(Base):
+    __tablename__ = "score_audits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="CASCADE"), nullable=False)
+    source = Column(String(50), nullable=False)
+    amount = Column(Integer, nullable=False)
+    description = Column(String(500), nullable=True)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+    team = relationship("GameTeam")
+
+class ScoreHistory(Base):
+    __tablename__ = "score_histories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="CASCADE"), nullable=False)
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), nullable=False)
+    score_flags = Column(Integer, default=0)
+    score_uptime = Column(Integer, default=0)
+    score_tickets = Column(Integer, default=0)
+    score_beacons = Column(Integer, default=0)
+    total_score = Column(Integer, default=0)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+    team = relationship("GameTeam")
+    game = relationship("Game")
+
+
 engine = create_engine(config.DATABASE_URL, connect_args={"check_same_thread": False} if config.DATABASE_URL.startswith("sqlite") else {})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 db_session = SessionLocal()
@@ -392,3 +421,19 @@ def init_db():
             conn.execute(text("ALTER TABLE games ADD COLUMN zero_out_time DATETIME"))
     except Exception:
         pass
+
+
+import logging
+from sqlalchemy import event
+
+@event.listens_for(ScoreAudit, 'after_insert')
+def log_score_audit(mapper, connection, target):
+    logger = logging.getLogger("scorebot_core_lite")
+    logger.info(
+        "SCORE_AUDIT: team_id=%s source=%s amount=%d desc=\"%s\"",
+        target.team_id,
+        target.source,
+        target.amount,
+        target.description or ""
+    )
+

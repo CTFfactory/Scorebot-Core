@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
-from scorebot_core_lite.models import SessionLocal, GameTeam, Purchase
+from scorebot_core_lite.models import SessionLocal, GameTeam, Purchase, ScoreAudit
 from scorebot_core_lite.auth import verify_store_token
 
 router = APIRouter()
@@ -52,6 +52,14 @@ async def make_purchase(request: Request):
                 team_id=team.id
             )
             session.add(purchase)
+            
+            audit = ScoreAudit(
+                team_id=team.id,
+                source="STORE",
+                amount=-points_cost,
+                description=f"Purchased: {item_name[:150]}"
+            )
+            session.add(audit)
 
         session.commit()
         return {"status": "success", "message": "Purchase processed"}
@@ -90,8 +98,22 @@ async def transfer_points(request: Request):
 
         if source_team:
             source_team.score_uptime -= amount
+            audit_src = ScoreAudit(
+                team_id=source_team.id,
+                source="TRANSFER",
+                amount=-amount,
+                description=f"Transferred to {dest_team.name if dest_team else 'Gold Team'}"
+            )
+            session.add(audit_src)
         if dest_team:
             dest_team.score_uptime += amount
+            audit_dest = ScoreAudit(
+                team_id=dest_team.id,
+                source="TRANSFER",
+                amount=amount,
+                description=f"Received from {source_team.name if source_team else 'Gold Team'}"
+            )
+            session.add(audit_dest)
 
         session.commit()
         return {"status": "success", "message": "Transfer processed"}

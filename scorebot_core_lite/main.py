@@ -18,7 +18,7 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Depends, status, HTTPException
+from fastapi import FastAPI, Request, Depends, status, HTTPException, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
@@ -53,6 +53,7 @@ from scorebot_core_lite.api.ticket import router as ticket_router
 from scorebot_core_lite.api.store import router as store_router
 from scorebot_core_lite.api.mapper import router as mapper_router
 from scorebot_core_lite.api.hosts import router as hosts_router
+from scorebot_core_lite.api.message import router as message_router
 
 # Setup logging
 logging.basicConfig(
@@ -105,6 +106,7 @@ app.include_router(ticket_router)
 app.include_router(store_router)
 app.include_router(mapper_router)
 app.include_router(hosts_router)
+app.include_router(message_router)
 
 @app.get("/healthz", response_class=JSONResponse)
 def healthz():
@@ -114,6 +116,91 @@ def healthz():
         "service": "scorebot-core-lite",
         "scheduler_running": daemon.running
     }
+
+@app.get("/metrics")
+def prometheus_metrics():
+    """Prometheus metrics endpoint."""
+    from scorebot_core_lite.models import GameTeam, ScoreAudit, ScoreHistory, Service
+    from sqlalchemy import func
+    
+    session = SessionLocal()
+    try:
+        teams = session.query(GameTeam).all()
+        lines = []
+        
+        lines.append("# HELP scorebot_team_score_total Current total score of the team")
+        lines.append("# TYPE scorebot_team_score_total gauge")
+        
+        lines.append("# HELP scorebot_team_score_flags Points from flags per team")
+        lines.append("# TYPE scorebot_team_score_flags gauge")
+        
+        lines.append("# HELP scorebot_team_score_uptime Points from uptime per team")
+        lines.append("# TYPE scorebot_team_score_uptime gauge")
+        
+        lines.append("# HELP scorebot_team_score_tickets Points from tickets per team")
+        lines.append("# TYPE scorebot_team_score_tickets gauge")
+        
+        lines.append("# HELP scorebot_team_score_beacons Points from beacons per team")
+        lines.append("# TYPE scorebot_team_score_beacons gauge")
+
+        lines.append("# HELP scorebot_team_tickets_open_total Open tickets per team")
+        lines.append("# TYPE scorebot_team_tickets_open_total gauge")
+
+        lines.append("# HELP scorebot_team_tickets_closed_total Closed tickets per team")
+        lines.append("# TYPE scorebot_team_tickets_closed_total gauge")
+        
+        for team in teams:
+            team_id = team.id
+            team_name = team.name.replace('"', '\\"')
+            color_hex = f"#{hex(team.color).replace('0x', '').zfill(6)}"
+            
+            lines.append(f'scorebot_team_score_total{{team_id="{team_id}",team_name="{team_name}",color="{color_hex}"}} {team.get_score()}')
+            lines.append(f'scorebot_team_score_flags{{team_id="{team_id}",team_name="{team_name}",color="{color_hex}"}} {team.score_flags}')
+            lines.append(f'scorebot_team_score_uptime{{team_id="{team_id}",team_name="{team_name}",color="{color_hex}"}} {team.score_uptime}')
+            lines.append(f'scorebot_team_score_tickets{{team_id="{team_id}",team_name="{team_name}",color="{color_hex}"}} {team.score_tickets}')
+            lines.append(f'scorebot_team_score_beacons{{team_id="{team_id}",team_name="{team_name}",color="{color_hex}"}} {team.score_beacons}')
+            
+            open_tickets = len([t for t in team.tickets if not t.closed])
+            closed_tickets = len([t for t in team.tickets if t.closed])
+            lines.append(f'scorebot_team_tickets_open_total{{team_id="{team_id}",team_name="{team_name}"}} {open_tickets}')
+            lines.append(f'scorebot_team_tickets_closed_total{{team_id="{team_id}",team_name="{team_name}"}} {closed_tickets}')
+            
+        lines.append("# HELP scorebot_service_status Status of scoring services (0=up, 1=down, 2=timeout, 3=refused, 4=yellow)")
+        lines.append("# TYPE scorebot_service_status gauge")
+        
+        services = session.query(Service).all()
+        for service in services:
+            if service.host and service.host.team:
+                team_id = service.host.team.id
+                team_name = service.host.team.name.replace('"', '\\"')
+                host_name = (service.host.name or service.host.fqdn).replace('"', '\\"')
+                srv_name = service.name.replace('"', '\\"')
+                lines.append(f'scorebot_service_status{{team_id="{team_id}",team_name="{team_name}",host_name="{host_name}",service_name="{srv_name}",port="{service.port}"}} {service.status}')
+                
+        lines.append("# HELP scorebot_team_score_by_source_total Cumulative points earned by source per team")
+        lines.append("# TYPE scorebot_team_score_by_source_total gauge")
+        
+        audit_sums = session.query(
+            ScoreAudit.team_id,
+            ScoreAudit.source,
+            func.sum(ScoreAudit.amount)
+        ).group_by(ScoreAudit.team_id, ScoreAudit.source).all()
+        
+        audit_map = {}
+        for t_id, src, amt in audit_sums:
+            audit_map[(t_id, src)] = amt
+            
+        for team in teams:
+            team_id = team.id
+            team_name = team.name.replace('"', '\\"')
+            for source in ["UPTIME", "TICKET", "FLAG", "STORE", "BEACON", "ADJUSTMENT"]:
+                amt = audit_map.get((team_id, source), 0)
+                lines.append(f'scorebot_team_score_by_source_total{{team_id="{team_id}",team_name="{team_name}",source="{source}"}} {amt}')
+                
+        return Response(content="\n".join(lines) + "\n", media_type="text/plain")
+    finally:
+        session.close()
+
 
 @app.get("/force-logout")
 def force_logout():

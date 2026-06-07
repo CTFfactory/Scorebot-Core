@@ -1,6 +1,6 @@
 import datetime
 from fastapi import APIRouter, HTTPException, Depends, Request
-from scorebot_core_lite.models import SessionLocal, GameTeam, GameTicket, GameEvent
+from scorebot_core_lite.models import SessionLocal, GameTeam, GameTicket, GameEvent, ScoreAudit
 from scorebot_core_lite.auth import verify_ticket_token
 from scorebot_core_lite.scoring.notifications import send_notification
 
@@ -61,6 +61,13 @@ async def submit_tickets(request: Request):
                 team = ticket.team
                 refund = ticket.total if ticket.type == 1 else int(ticket.total / 2)
                 team.score_tickets += refund
+                
+                session.add(ScoreAudit(
+                    team_id=team.id,
+                    source="TICKET-CLOSE",
+                    amount=refund,
+                    description=f"Closed ticket {ticket.name}"
+                ))
 
                 event_msg = f'Team {team.name} just closed a Ticket "{ticket.name}"!'
                 event = GameEvent(
@@ -80,6 +87,13 @@ async def submit_tickets(request: Request):
                 multiplier = (game.ticket_reopen_multiplier / 100.0) if game else 2.0
                 deduction = int(multiplier * ticket.total)
                 team.score_tickets -= deduction
+
+                session.add(ScoreAudit(
+                    team_id=team.id,
+                    source="TICKET-REOPEN",
+                    amount=-deduction,
+                    description=f"Reopened ticket {ticket.name}"
+                ))
 
                 event_msg = f'Ticket "{ticket.name}" for {team.name} was reopened!'
                 event = GameEvent(

@@ -1,7 +1,7 @@
 import random
 import datetime
 from fastapi import APIRouter, HTTPException, Depends, Request
-from scorebot_core_lite.models import SessionLocal, GameTeam, Flag, GameEvent
+from scorebot_core_lite.models import SessionLocal, GameTeam, Flag, GameEvent, ScoreAudit
 from scorebot_core_lite.auth import verify_cli_token
 from scorebot_core_lite.scoring.notifications import send_notification
 
@@ -51,12 +51,27 @@ async def capture_flag(request: Request):
         victim = flag.team
         game = attacker.game
         if game.flag_stolen_rate > 0:
-            victim.score_flags -= game.flag_stolen_rate
+            stolen_amt = game.flag_stolen_rate
         else:
-            victim.score_flags -= flag.value * game.flag_captured_multiplier
+            stolen_amt = flag.value * game.flag_captured_multiplier
+            
+        victim.score_flags -= stolen_amt
+        session.add(ScoreAudit(
+            team_id=victim.id,
+            source="FLAG-STOLEN",
+            amount=-stolen_amt,
+            description=f"Flag stolen by {attacker.name}"
+        ))
 
         # Add to attacker
-        attacker.score_flags += flag.value * game.flag_captured_multiplier
+        capture_amt = flag.value * game.flag_captured_multiplier
+        attacker.score_flags += capture_amt
+        session.add(ScoreAudit(
+            team_id=attacker.id,
+            source="FLAG-CAPTURE",
+            amount=capture_amt,
+            description=f"Captured flag from {victim.name}"
+        ))
 
         # Add Event
         event_msg = f"A Flag from {victim.name} was stolen by {attacker.name}!"
