@@ -1,0 +1,17 @@
+{% for ticket in tickets %}
+<div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 hover:border-slate-700 cursor-pointer flex items-center justify-between transition"
+     hx-get="/tickets/tickets/{{ ticket.id }}/messages?sender_role=grey_team"
+     hx-target="#messages-container"
+     hx-swap="innerHTML">
+    <div class="truncate max-w-[70%]">
+        <span class="text-[10px] text-slate-500 block">ID: {{ ticket.ticket_id }} &bull; {{ ticket.team_name }}</span>
+        <h3 class="font-medium text-sm text-slate-200 truncate">{{ ticket.title }}</h3>
+    </div>
+    <span id="badge-{{ ticket.id }}" class="px-2 py-0.5 text-[10px] font-semibold rounded-full 
+        {% if ticket.status == 'open' %}bg-amber-900/30 text-amber-300 border border-amber-800{% else %}bg-emerald-900/30 text-emerald-300 border border-emerald-800{% endif %}">
+        {{ ticket.status.upper() }}
+    </span>
+</div>
+{% else %}
+<p class="text-slate-600 text-xs text-center py-4">No tickets created yet.</p>
+{% endfor %}

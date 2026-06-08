@@ -24,6 +24,37 @@ API_TOKEN_MONITOR = os.getenv("API_TOKEN_MONITOR", "monitor-token")
 API_TOKEN_CLI = os.getenv("API_TOKEN_CLI", "cli-token")
 API_TOKEN_STORE = os.getenv("API_TOKEN_STORE", "store-token")
 API_TOKEN_TICKET = os.getenv("API_TOKEN_TICKET", "ticket-token")
+def _get_or_create_grey_token():
+    env_token = os.getenv("API_TOKEN_GREY")
+    if env_token:
+        return env_token
+    
+    paths = [
+        "/opt/scorebot/grey_token.txt",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "grey_token.txt")
+    ]
+    
+    for path in paths:
+        try:
+            if os.path.exists(path):
+                with open(path, "r") as f:
+                    token = f.read().strip()
+                    if token:
+                        return token
+            parent_dir = os.path.dirname(path)
+            if os.path.exists(parent_dir) and os.access(parent_dir, os.W_OK):
+                import uuid
+                new_token = str(uuid.uuid4())
+                with open(path, "w") as f:
+                    f.write(new_token)
+                return new_token
+        except Exception:
+            pass
+            
+    import uuid
+    return str(uuid.uuid4())
+
+API_TOKEN_GREY = _get_or_create_grey_token()
 
 SCORING_INTERVAL = int(os.getenv("SCORING_INTERVAL", "15"))
 CLEANUP_INTERVAL = int(os.getenv("CLEANUP_INTERVAL", "30"))

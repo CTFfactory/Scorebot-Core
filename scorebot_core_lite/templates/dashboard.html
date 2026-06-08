@@ -359,6 +359,7 @@
                 <p style="margin: 0; color: #9ca3af;">Administration Dashboard</p>
             </div>
             <div style="display: flex; align-items: center; gap: 1rem;">
+                <span style="color: #9ca3af; font-size: 0.85rem;">Grey Team Token: <code style="background: rgba(255,255,255,0.05); padding: 0.25rem 0.5rem; border-radius: 4px; color: #60a5fa; cursor: pointer;" onclick="navigator.clipboard.writeText('{{ grey_token }}'); alert('Grey Team Token copied!');">{{ grey_token }}</code></span>
                 <span class="badge badge-running">Active</span>
                 <button class="btn btn-sm btn-danger" onclick="logout()">Logout</button>
             </div>

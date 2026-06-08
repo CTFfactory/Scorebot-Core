@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Ticket Server{% endblock %}
+
+{% block nav_actions %}
+<span class="text-sm bg-purple-900/40 text-purple-300 border border-purple-800 px-3 py-1 rounded">Grey Team Control</span>
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- Tickets List and Creation Form -->
+    <div class="space-y-8 h-[75vh] flex flex-col">
+        <!-- Creation Form -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
+            <h2 class="text-lg font-bold mb-4 text-slate-200">Create New Ticket</h2>
+            <form hx-post="/tickets/admin/tickets" hx-target="#ticket-rows" hx-swap="innerHTML" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Ticket ID</label>
+                        <input type="number" name="ticket_id" required class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Category (Type)</label>
+                        <input type="number" name="category" value="0" required class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Title</label>
+                    <input type="text" name="title" required class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Description</label>
+                    <textarea name="description" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Team Token (UUID)</label>
+                        <input type="text" name="team_token" required class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Team Name (Display)</label>
+                        <input type="text" name="team_name" placeholder="Optional" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded text-sm transition">
+                    Create & Broadcast
+                </button>
+            </form>
+        </div>
+
+        <!-- Ticket Quick List -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl flex-grow overflow-y-auto">
+            <h2 class="text-lg font-bold mb-4 text-slate-200">Active Tickets</h2>
+            <div id="ticket-rows" class="space-y-3">
+                {% include "partials/ticket_rows.html" %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Ticket Discussion/Grading Container -->
+    <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl h-[75vh] flex flex-col">
+        <div id="messages-container" class="flex flex-col h-full items-center justify-center text-slate-500">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-16 h-16 mb-4 text-slate-600">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.03 0 1.9.693 2.166 1.638m-7.377 2.24a4.502 4.502 0 0 0-2.25 2.25m7.422-4.128a48.147 48.147 0 0 0-3.078-.166M4.5 12h.008v.008H4.5V12Zm0 3h.008v.008H4.5V15Zm0 3h.008v.008H4.5V18Z" />
+            </svg>
+            <p>Select an active ticket from the list below to review conversation and toggle state.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

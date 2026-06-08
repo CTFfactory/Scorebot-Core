@@ -1,0 +1,21 @@
+<div class="flex items-center justify-between bg-slate-950 p-4 rounded-lg border border-slate-800" id="ticket-meta-{{ ticket.id }}">
+    <div>
+        <h3 class="text-lg font-bold text-slate-100">{{ ticket.title }}</h3>
+        <p class="text-xs text-slate-500 mt-1">Ticket ID: {{ ticket.ticket_id }} &bull; Team: {{ ticket.team_name }}</p>
+    </div>
+    <div class="flex items-center space-x-3">
+        <span class="px-2.5 py-1 text-xs font-semibold rounded-full 
+            {% if ticket.status == 'open' %}bg-amber-900/30 text-amber-300 border border-amber-800{% else %}bg-emerald-900/30 text-emerald-300 border border-emerald-800{% endif %}">
+            {{ ticket.status.upper() }}
+        </span>
+        {% if sender_role == 'grey_team' %}
+        <button hx-post="/tickets/admin/tickets/{{ ticket.id }}/toggle"
+                hx-target="#messages-container"
+                hx-swap="innerHTML"
+                class="px-4 py-1.5 text-xs font-semibold rounded transition
+                {% if ticket.status == 'open' %}bg-emerald-700 hover:bg-emerald-600 text-white{% else %}bg-amber-700 hover:bg-amber-600 text-white{% endif %}">
+            {% if ticket.status == 'open' %}Close Ticket{% else %}Reopen Ticket{% endif %}
+        </button>
+        {% endif %}
+    </div>
+</div>

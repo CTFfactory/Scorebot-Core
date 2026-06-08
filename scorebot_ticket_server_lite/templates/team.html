@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Blue Team Dashboard - Ticket Server{% endblock %}
+
+{% block nav_actions %}
+<span class="text-sm text-slate-400">Token: <code class="bg-slate-950 px-2 py-1 rounded text-slate-300">{{ token[:8] }}...</code></span>
+<a href="/tickets/team/logout" class="bg-red-900/40 border border-red-800 text-red-200 px-3 py-1.5 rounded hover:bg-red-800/40 transition">Logout</a>
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- Tickets List -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl h-[70vh] flex flex-col">
+        <h2 class="text-xl font-bold mb-4 text-slate-200">Your Tickets</h2>
+        <div class="space-y-4 overflow-y-auto flex-grow pr-2">
+            {% for ticket in tickets %}
+            <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 hover:border-slate-700 cursor-pointer transition"
+                 hx-get="/tickets/tickets/{{ ticket.id }}/messages?sender_role=blue_team"
+                 hx-target="#messages-container"
+                 hx-swap="innerHTML">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs text-slate-500">ID: {{ ticket.ticket_id }}</span>
+                    <span id="badge-{{ ticket.id }}" class="px-2 py-0.5 text-xs font-semibold rounded-full 
+                        {% if ticket.status == 'open' %}bg-amber-900/30 text-amber-300 border border-amber-800{% else %}bg-emerald-900/30 text-emerald-300 border border-emerald-800{% endif %}">
+                        {{ ticket.status.upper() }}
+                    </span>
+                </div>
+                <h3 class="font-semibold text-slate-200 truncate">{{ ticket.title }}</h3>
+                <p class="text-xs text-slate-500 mt-1">Category {{ ticket.category }}</p>
+            </div>
+            {% else %}
+            <p class="text-slate-500 text-sm text-center py-8">No tickets assigned to your team yet.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Active Ticket Discussion & Details -->
+    <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl h-[70vh] flex flex-col">
+        <div id="messages-container" class="flex flex-col h-full items-center justify-center text-slate-500">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-16 h-16 mb-4 text-slate-600">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.083.185.125.39.125.61v8.127c0 1.242-1.008 2.25-2.25 2.25H6c-1.242 0-2.25-1.008-2.25-2.25V9.12c0-.218.042-.424.125-.61m16.25 0a3.498 3.498 0 0 0-3.203-3.203M19.5 8.511l-7.5 5.25-7.5-5.25m15 0H4.5m11.996-3.203a3.498 3.498 0 0 0-3.033-2.916m-5.625 0A3.498 3.498 0 0 0 4.5 5.308m11.996-2.001c.218-.042.424-.042.642 0m-8.263 0a3.498 3.498 0 0 1 8.263 0" />
+            </svg>
+            <p>Select a ticket from the left panel to open details and messaging.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

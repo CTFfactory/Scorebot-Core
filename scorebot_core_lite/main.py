@@ -108,6 +108,10 @@ app.include_router(mapper_router)
 app.include_router(hosts_router)
 app.include_router(message_router)
 
+# Mount Ticket Server Lite sub-app
+from scorebot_ticket_server_lite.main import app as ticket_app
+app.mount("/tickets", ticket_app)
+
 @app.get("/healthz", response_class=JSONResponse)
 def healthz():
     """Health check endpoint."""
@@ -291,7 +295,8 @@ def dashboard(request: Request):
                 name="dashboard.html",
                 context={
                     "games": games,
-                    "admin_token": config.API_TOKEN_ADMIN
+                    "admin_token": config.API_TOKEN_ADMIN,
+                    "grey_token": config.API_TOKEN_GREY
                 }
             )
         else:
@@ -300,7 +305,8 @@ def dashboard(request: Request):
                 {
                     "request": request,
                     "games": games,
-                    "admin_token": config.API_TOKEN_ADMIN
+                    "admin_token": config.API_TOKEN_ADMIN,
+                    "grey_token": config.API_TOKEN_GREY
                 }
             )
     finally:
