@@ -296,6 +296,59 @@
             width: auto;
             flex-grow: 1;
         }
+
+        /* Collapsible Accordion Styles */
+        .collapsible-section {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.01);
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+
+        .collapsible-section > summary {
+            padding: 0.75rem 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.03);
+            list-style: none; /* remove default marker */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            transition: background 0.2s ease;
+        }
+
+        .collapsible-section > summary::-webkit-details-marker {
+            display: none; /* remove default marker on Safari/Chrome */
+        }
+
+        .collapsible-section > summary:hover {
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .collapsible-section > summary::after {
+            content: '▼';
+            font-size: 0.75rem;
+            color: #9ca3af;
+            transition: transform 0.2s ease;
+            margin-left: 0.5rem;
+        }
+
+        .collapsible-section[open] > summary::after {
+            transform: rotate(180deg);
+        }
+
+        .collapsible-content {
+            padding: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        /* Specific nested styles */
+        .collapsible-section .collapsible-section {
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -474,83 +527,90 @@
             const container = document.getElementById(`details-container-${gameId}`);
             
             let html = `
-                <div class="details-grid">
-                    <div>
-                        <h3 class="details-section-title">Game Parameters</h3>
-                        <form onsubmit="saveParameters(event, ${gameId})">
-                            <div class="parameters-form">
-                                <div class="form-group">
-                                    <label>Round Time (sec)</label>
-                                    <input type="number" name="round_time" value="${game.round_time || 15}" required>
+                <div class="details-hierarchical">
+                    <!-- Section 1: Game Parameters -->
+                    <details class="collapsible-section" open>
+                        <summary><span style="color: #60a5fa;">Game Parameters & Settings</span></summary>
+                        <div class="collapsible-content">
+                            <div class="details-grid-params" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                                <div>
+                                    <form onsubmit="saveParameters(event, ${gameId})">
+                                        <div class="parameters-form">
+                                            <div class="form-group">
+                                                <label>Round Time (sec)</label>
+                                                <input type="number" name="round_time" value="${game.round_time || 15}" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Job Timeout (sec)</label>
+                                                <input type="number" name="job_timeout" value="${game.job_timeout || 30}" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Job Cleanup (sec)</label>
+                                                <input type="number" name="job_cleanup_time" value="${game.job_cleanup_time || 300}" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Flag Stolen Rate</label>
+                                                <input type="number" name="flag_stolen_rate" value="${game.flag_stolen_rate || 0}" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Flag Multiplier</label>
+                                                <input type="number" name="flag_captured_multiplier" value="${game.flag_captured_multiplier || 1}" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Beacon Value</label>
+                                                <input type="number" name="beacon_value" value="${game.beacon_value || 10}" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Ticket Cost</label>
+                                                <input type="number" name="ticket_cost" value="${game.ticket_cost || 5}" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Ticket Max Score</label>
+                                                <input type="number" name="ticket_max_score" value="${game.ticket_max_score || 100}" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Ticket Grace (sec)</label>
+                                                <input type="number" name="ticket_grace_period" value="${game.ticket_grace_period || 60}" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Ticket Max Scoring</label>
+                                                <input type="number" name="ticket_max_scoring" value="${game.ticket_max_scoring || 3600}" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Ping Ratio (%)</label>
+                                                <input type="number" name="host_ping_ratio" value="${game.host_ping_ratio || 50}" required>
+                                            </div>
+                                        </div>
+                                        <button type="submit" class="btn btn-sm btn-success" style="width: 100%; margin-top: 1rem;">Save Parameters</button>
+                                    </form>
                                 </div>
-                                <div class="form-group">
-                                    <label>Job Timeout (sec)</label>
-                                    <input type="number" name="job_timeout" value="${game.job_timeout || 30}" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Job Cleanup (sec)</label>
-                                    <input type="number" name="job_cleanup_time" value="${game.job_cleanup_time || 300}" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Flag Stolen Rate</label>
-                                    <input type="number" name="flag_stolen_rate" value="${game.flag_stolen_rate || 0}" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Flag Multiplier</label>
-                                    <input type="number" name="flag_captured_multiplier" value="${game.flag_captured_multiplier || 1}" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Beacon Value</label>
-                                    <input type="number" name="beacon_value" value="${game.beacon_value || 10}" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Ticket Cost</label>
-                                    <input type="number" name="ticket_cost" value="${game.ticket_cost || 5}" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Ticket Max Score</label>
-                                    <input type="number" name="ticket_max_score" value="${game.ticket_max_score || 100}" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Ticket Grace (sec)</label>
-                                    <input type="number" name="ticket_grace_period" value="${game.ticket_grace_period || 60}" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Ticket Max Scoring</label>
-                                    <input type="number" name="ticket_max_scoring" value="${game.ticket_max_scoring || 3600}" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Ping Ratio (%)</label>
-                                    <input type="number" name="host_ping_ratio" value="${game.host_ping_ratio || 50}" required>
-                                </div>
-                            </div>
-                            <button type="submit" class="btn btn-sm btn-success" style="width: 100%; margin-top: 1rem;">Save Parameters</button>
-                        </form>
-                        
-                        <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                            <h4 style="margin-top: 0; margin-bottom: 0.75rem; color: #60a5fa; font-size: 1rem;">Score Reset Control</h4>
-                            <div style="display: flex; gap: 0.75rem; flex-direction: column;">
-                                <button type="button" class="btn btn-sm btn-danger" onclick="zeroScores(${gameId})" style="width: 100%;">Zero Out All Scores Now</button>
-                                
-                                <div class="form-group" style="margin-top: 0.5rem; margin-bottom: 0;">
-                                    <label>Schedule Zero-Out Time</label>
-                                    <div style="display: flex; gap: 0.5rem;">
-                                        <input type="datetime-local" id="zero-out-time-${gameId}" value="${game.zero_out_time ? game.zero_out_time.substring(0, 16) : ''}" style="padding: 0.4rem; font-size: 0.8rem; flex-grow: 1;">
-                                        <button type="button" class="btn btn-sm btn-info" onclick="scheduleZeroOut(${gameId})">Set</button>
-                                        <button type="button" class="btn btn-sm btn-warning" onclick="cancelZeroOut(${gameId})">Cancel</button>
+                                <div style="border-left: 1px solid var(--border-color); padding-left: 2rem;">
+                                    <h4 style="margin-top: 0; margin-bottom: 0.75rem; color: #60a5fa; font-size: 1rem;">Score Reset Control</h4>
+                                    <div style="display: flex; gap: 0.75rem; flex-direction: column;">
+                                        <button type="button" class="btn btn-sm btn-danger" onclick="zeroScores(${gameId})" style="width: 100%;">Zero Out All Scores Now</button>
+                                        
+                                        <div class="form-group" style="margin-top: 0.5rem; margin-bottom: 0;">
+                                            <label>Schedule Zero-Out Time</label>
+                                            <div style="display: flex; gap: 0.5rem;">
+                                                <input type="datetime-local" id="zero-out-time-${gameId}" value="${game.zero_out_time ? game.zero_out_time.substring(0, 16) : ''}" style="padding: 0.4rem; font-size: 0.8rem; flex-grow: 1;">
+                                                <button type="button" class="btn btn-sm btn-info" onclick="scheduleZeroOut(${gameId})">Set</button>
+                                                <button type="button" class="btn btn-sm btn-warning" onclick="cancelZeroOut(${gameId})">Cancel</button>
+                                            </div>
+                                            ${game.zero_out_time ? `<div style="font-size: 0.75rem; color: #fbbf24; margin-top: 0.4rem;">Scheduled: ${new Date(game.zero_out_time + 'Z').toLocaleString()}</div>` : ''}
+                                        </div>
                                     </div>
-                                    ${game.zero_out_time ? `<div style="font-size: 0.75rem; color: #fbbf24; margin-top: 0.4rem;">Scheduled: ${new Date(game.zero_out_time + 'Z').toLocaleString()}</div>` : ''}
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </details>
 
-                    <div>
-                        <h3 class="details-section-title">
-                            <span>Teams, Hosts & Services</span>
-                            <button class="btn btn-sm btn-info" onclick="addTeamPrompt(${gameId})">+ Add Team</button>
-                        </h3>
-                        <div id="teams-list-container-${gameId}">
+                    <!-- Section 2: Teams, Hosts & Services -->
+                    <details class="collapsible-section" open>
+                        <summary>
+                            <span style="color: #60a5fa;">Teams, Hosts & Services Configuration</span>
+                            <button class="btn btn-sm btn-info" onclick="event.stopPropagation(); addTeamPrompt(${gameId});">+ Add Team</button>
+                        </summary>
+                        <div class="collapsible-content" id="teams-list-container-${gameId}">
             `;
 
             if (game.teams.length === 0) {
@@ -559,119 +619,148 @@
                 game.teams.forEach(team => {
                     const colorHex = '#' + (team.color >>> 0).toString(16).padStart(6, '0');
                     html += `
-                        <div class="team-card">
-                            <div style="font-size: 0.8rem; color: #9ca3af; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; background: rgba(0,0,0,0.25); padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
-                                <div><strong>Token:</strong> <code style="color: #60a5fa;">${team.token}</code></div>
-                                <div style="display: flex; gap: 0.25rem;">
-                                    <button type="button" class="btn btn-sm btn-info" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;" onclick="navigator.clipboard.writeText('${team.token}'); alert('Token copied!');">Copy</button>
-                                    <button type="button" class="btn btn-sm btn-danger" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;" onclick="deleteTeam(${team.id}, ${gameId})">Delete Team</button>
-                                </div>
-                            </div>
-                            <form onsubmit="saveTeam(event, ${team.id})" class="team-header-form">
-                                <strong style="color: ${colorHex}; min-width: 100px;">${team.name}</strong>
-                                <input type="text" name="subnet" value="${team.subnet || ''}" placeholder="Subnet e.g. 10.1.1.0/24" style="flex-grow: 2;">
-                                <input type="color" name="color_picker" value="${colorHex}" style="width: 40px; padding: 0;">
-                                <select name="offensive">
-                                    <option value="false" ${!team.offensive ? 'selected' : ''}>Defensive</option>
-                                    <option value="true" ${team.offensive ? 'selected' : ''}>Offensive</option>
-                                </select>
-                                <select name="minimal">
-                                    <option value="false" ${!team.minimal ? 'selected' : ''}>Standard</option>
-                                    <option value="true" ${team.minimal ? 'selected' : ''}>Minimal</option>
-                                </select>
-                                <select name="visible">
-                                    <option value="true" ${team.visible !== false ? 'selected' : ''}>Visible</option>
-                                    <option value="false" ${team.visible === false ? 'selected' : ''}>Hidden</option>
-                                </select>
-                                <button type="submit" class="btn btn-sm btn-success">Save</button>
-                            </form>
-
-                            <div style="margin: 0.5rem 0; padding: 0.5rem; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid var(--border-color);">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div><strong>Current Score:</strong> <span style="font-size: 1.1rem; color: #10b981; font-weight: 600;">${team.score || 0}</span></div>
-                                    <button type="button" class="btn btn-sm btn-info" onclick="adjustScorePrompt(${team.id}, '${team.name.replace(/'/g, "\\'")}', ${gameId})">Modify Score</button>
-                                </div>
-                                ${team.score_adjustments && team.score_adjustments.length > 0 ? `
-                                    <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #9ca3af; border-top: 1px solid var(--border-color); padding-top: 0.5rem;">
-                                        <div style="font-weight: 600; margin-bottom: 0.25rem;">Adjustments History:</div>
-                                        <ul style="margin: 0; padding-left: 1.25rem; max-height: 100px; overflow-y: auto;">
-                                            ${team.score_adjustments.map(adj => `
-                                                <li><strong>${adj.amount > 0 ? '+' : ''}${adj.amount}</strong>: ${adj.reason || 'No reason'} <span style="font-size: 0.7rem; color: #6b7280;">(${new Date(adj.timestamp).toLocaleString()})</span></li>
-                                            `).join('')}
-                                        </ul>
+                        <!-- Team Collapsible -->
+                        <details class="collapsible-section team-card" style="margin-bottom: 1rem;">
+                            <summary style="background: rgba(0,0,0,0.15);">
+                                <span style="display: flex; align-items: center; gap: 0.75rem;">
+                                    <strong style="color: ${colorHex}; font-size: 1.1rem;">${team.name}</strong>
+                                    <span class="badge" style="background-color: rgba(255, 255, 255, 0.05); color: #9ca3af; text-transform: none;">
+                                        Score: ${team.score || 0}
+                                    </span>
+                                </span>
+                            </summary>
+                            <div class="collapsible-content">
+                                <div style="font-size: 0.8rem; color: #9ca3af; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; background: rgba(0,0,0,0.25); padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                                    <div><strong>Token:</strong> <code style="color: #60a5fa;">${team.token}</code></div>
+                                    <div style="display: flex; gap: 0.25rem;">
+                                        <button type="button" class="btn btn-sm btn-info" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;" onclick="navigator.clipboard.writeText('${team.token}'); alert('Token copied!');">Copy</button>
+                                        <button type="button" class="btn btn-sm btn-danger" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;" onclick="deleteTeam(${team.id}, ${gameId})">Delete Team</button>
                                     </div>
-                                ` : ''}
-                            </div>
-
-                            <div class="hosts-list">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                    <strong style="font-size: 0.9rem; color: #9ca3af;">Hosts</strong>
-                                    <button class="btn btn-sm btn-info" onclick="addHostPrompt(${team.id}, ${gameId})">+ Add Host</button>
                                 </div>
+                                <form onsubmit="saveTeam(event, ${team.id})" class="team-header-form">
+                                    <strong style="color: ${colorHex}; min-width: 100px;">${team.name}</strong>
+                                    <input type="text" name="subnet" value="${team.subnet || ''}" placeholder="Subnet e.g. 10.1.1.0/24" style="flex-grow: 2;">
+                                    <input type="color" name="color_picker" value="${colorHex}" style="width: 40px; padding: 0;">
+                                    <select name="offensive">
+                                        <option value="false" ${!team.offensive ? 'selected' : ''}>Defensive</option>
+                                        <option value="true" ${team.offensive ? 'selected' : ''}>Offensive</option>
+                                    </select>
+                                    <select name="minimal">
+                                        <option value="false" ${!team.minimal ? 'selected' : ''}>Standard</option>
+                                        <option value="true" ${team.minimal ? 'selected' : ''}>Minimal</option>
+                                    </select>
+                                    <select name="visible">
+                                        <option value="true" ${team.visible !== false ? 'selected' : ''}>Visible</option>
+                                        <option value="false" ${team.visible === false ? 'selected' : ''}>Hidden</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-success">Save</button>
+                                </form>
+
+                                <div style="margin: 0.5rem 0; padding: 0.5rem; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid var(--border-color);">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div><strong>Current Score:</strong> <span style="font-size: 1.1rem; color: #10b981; font-weight: 600;">${team.score || 0}</span></div>
+                                        <button type="button" class="btn btn-sm btn-info" onclick="adjustScorePrompt(${team.id}, '${team.name.replace(/'/g, "\\'")}', ${gameId})">Modify Score</button>
+                                    </div>
+                                    ${team.score_adjustments && team.score_adjustments.length > 0 ? `
+                                        <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #9ca3af; border-top: 1px solid var(--border-color); padding-top: 0.5rem;">
+                                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Adjustments History:</div>
+                                            <ul style="margin: 0; padding-left: 1.25rem; max-height: 100px; overflow-y: auto;">
+                                                ${team.score_adjustments.map(adj => `
+                                                    <li><strong>${adj.amount > 0 ? '+' : ''}${adj.amount}</strong>: ${adj.reason || 'No reason'} <span style="font-size: 0.7rem; color: #6b7280;">(${new Date(adj.timestamp).toLocaleString()})</span></li>
+                                                `).join('')}
+                                            </ul>
+                                        </div>
+                                    ` : ''}
+                                </div>
+
+                                <!-- Hosts Collapsible Section under Team -->
+                                <details class="collapsible-section" style="margin-top: 1rem;">
+                                    <summary style="background: rgba(0,0,0,0.1);">
+                                        <span style="font-size: 0.95rem; color: #e5e7eb;">Hosts (${team.hosts.length})</span>
+                                        <button class="btn btn-sm btn-info" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="event.stopPropagation(); addHostPrompt(${team.id}, ${gameId})">+ Add Host</button>
+                                    </summary>
+                                    <div class="collapsible-content hosts-list" style="border-left: none; padding-left: 0;">
                     `;
 
                     team.hosts.forEach(host => {
                         html += `
-                            <div class="host-item">
-                                <form onsubmit="saveHost(event, ${host.id}, ${gameId})" class="host-header-form">
-                                    <input type="text" name="fqdn" value="${host.fqdn}" placeholder="FQDN" required>
-                                    <input type="text" name="name" value="${host.name || ''}" placeholder="Short Name">
-                                    <input type="text" name="ip" value="${host.ip || ''}" placeholder="IP Address">
-                                    <select name="online">
-                                        <option value="true" ${host.online ? 'selected' : ''}>Online</option>
-                                        <option value="false" ${!host.online ? 'selected' : ''}>Offline</option>
-                                    </select>
-                                    <button type="submit" class="btn btn-sm btn-success">Save</button>
-                                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteHost(${host.id}, ${gameId})">Del</button>
-                                </form>
+                                        <!-- Host Collapsible -->
+                                        <details class="collapsible-section host-item" style="margin-bottom: 0.75rem;">
+                                            <summary style="background: rgba(0,0,0,0.05);">
+                                                <span style="display: flex; align-items: center; gap: 0.75rem;">
+                                                    <strong style="color: #60a5fa;">${host.fqdn}</strong>
+                                                    ${host.name ? `<span style="color: #9ca3af; font-size: 0.85rem;">(${host.name})</span>` : ''}
+                                                    <span class="badge ${host.online ? 'badge-running' : 'badge-finished'}" style="text-transform: none; padding: 0.15rem 0.4rem; font-size: 0.7rem;">
+                                                        ${host.online ? 'Online' : 'Offline'}
+                                                    </span>
+                                                </span>
+                                            </summary>
+                                            <div class="collapsible-content">
+                                                <form onsubmit="saveHost(event, ${host.id}, ${gameId})" class="host-header-form">
+                                                    <input type="text" name="fqdn" value="${host.fqdn}" placeholder="FQDN" required>
+                                                    <input type="text" name="name" value="${host.name || ''}" placeholder="Short Name">
+                                                    <input type="text" name="ip" value="${host.ip || ''}" placeholder="IP Address">
+                                                    <select name="online">
+                                                        <option value="true" ${host.online ? 'selected' : ''}>Online</option>
+                                                        <option value="false" ${!host.online ? 'selected' : ''}>Offline</option>
+                                                    </select>
+                                                    <button type="submit" class="btn btn-sm btn-success">Save</button>
+                                                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteHost(${host.id}, ${gameId})">Del</button>
+                                                </form>
 
-                                <div class="services-list">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                                        <span style="font-size: 0.8rem; color: #9ca3af;">Services</span>
-                                        <button class="btn btn-sm btn-info" style="padding: 0.1rem 0.3rem; font-size: 0.75rem;" onclick="addServicePrompt(${host.id}, ${gameId})">+ Add Service</button>
-                                    </div>
+                                                <!-- Services Collapsible Section under Host -->
+                                                <details class="collapsible-section" style="margin-top: 0.75rem;">
+                                                    <summary style="background: rgba(0,0,0,0.02); padding: 0.5rem 0.75rem;">
+                                                        <span style="font-size: 0.85rem; color: #e5e7eb;">Services (${host.services.length})</span>
+                                                        <button class="btn btn-sm btn-info" style="padding: 0.1rem 0.3rem; font-size: 0.75rem;" onclick="event.stopPropagation(); addServicePrompt(${host.id}, ${gameId})">+ Add Service</button>
+                                                    </summary>
+                                                    <div class="collapsible-content services-list" style="border-left: none; padding: 0.75rem 0 0 0;">
                         `;
 
                         host.services.forEach(svc => {
                             html += `
-                                <div class="service-item">
-                                    <input type="number" name="port" value="${svc.port}" placeholder="Port" style="width: 70px;" required>
-                                    <input type="text" name="name" value="${svc.name}" placeholder="Name" required>
-                                    <input type="number" name="value" value="${svc.value}" placeholder="Points" style="width: 60px;" required>
-                                    <select name="protocol" style="width: 70px;">
-                                        <option value="1" ${svc.protocol === 1 ? 'selected' : ''}>TCP</option>
-                                        <option value="2" ${svc.protocol === 2 ? 'selected' : ''}>UDP</option>
-                                    </select>
-                                    <input type="text" name="application" value="${svc.application || 'ping'}" placeholder="Application" style="width: 90px;">
-                                    <select name="status" style="width: 100px;">
-                                        <option value="0" ${svc.status === 0 ? 'selected' : ''}>Up (Green)</option>
-                                        <option value="1" ${svc.status === 1 ? 'selected' : ''}>Down (Red)</option>
-                                        <option value="2" ${svc.status === 2 ? 'selected' : ''}>Timeout</option>
-                                        <option value="3" ${svc.status === 3 ? 'selected' : ''}>Refused</option>
-                                        <option value="4" ${svc.status === 4 ? 'selected' : ''}>Yellow</option>
-                                    </select>
-                                    <button type="button" class="btn btn-sm btn-success" style="padding: 0.15rem 0.35rem;" onclick="saveService(this, ${svc.id}, ${gameId})">Save</button>
-                                    <button type="button" class="btn btn-sm btn-danger" style="padding: 0.15rem 0.35rem;" onclick="deleteService(${svc.id}, ${gameId})">Del</button>
-                                </div>
+                                                        <div class="service-item" style="border-bottom: 1px solid rgba(255,255,255,0.03); padding: 0.5rem 0;">
+                                                            <input type="number" name="port" value="${svc.port}" placeholder="Port" style="width: 70px;" required>
+                                                            <input type="text" name="name" value="${svc.name}" placeholder="Name" required>
+                                                            <input type="number" name="value" value="${svc.value}" placeholder="Points" style="width: 60px;" required>
+                                                            <select name="protocol" style="width: 70px;">
+                                                                <option value="1" ${svc.protocol === 1 ? 'selected' : ''}>TCP</option>
+                                                                <option value="2" ${svc.protocol === 2 ? 'selected' : ''}>UDP</option>
+                                                            </select>
+                                                            <input type="text" name="application" value="${svc.application || 'ping'}" placeholder="Application" style="width: 90px;">
+                                                            <select name="status" style="width: 100px;">
+                                                                <option value="0" ${svc.status === 0 ? 'selected' : ''}>Up (Green)</option>
+                                                                <option value="1" ${svc.status === 1 ? 'selected' : ''}>Down (Red)</option>
+                                                                <option value="2" ${svc.status === 2 ? 'selected' : ''}>Timeout</option>
+                                                                <option value="3" ${svc.status === 3 ? 'selected' : ''}>Refused</option>
+                                                                <option value="4" ${svc.status === 4 ? 'selected' : ''}>Yellow</option>
+                                                            </select>
+                                                            <button type="button" class="btn btn-sm btn-success" style="padding: 0.15rem 0.35rem;" onclick="saveService(this, ${svc.id}, ${gameId})">Save</button>
+                                                            <button type="button" class="btn btn-sm btn-danger" style="padding: 0.15rem 0.35rem;" onclick="deleteService(${svc.id}, ${gameId})">Del</button>
+                                                        </div>
                             `;
                         });
 
                         html += `
-                                </div>
-                            </div>
+                                                    </div>
+                                                </details>
+                                            </div>
+                                        </details>
                         `;
                     });
 
                     html += `
+                                    </div>
+                                </details>
                             </div>
-                        </div>
+                        </details>
                     `;
                 });
             }
 
             html += `
                         </div>
-                    </div>
+                    </details>
                 </div>
             `;
             container.innerHTML = html;
