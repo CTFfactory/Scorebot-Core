@@ -105,7 +105,7 @@ def sync_ticket_to_core(ticket: models.Ticket):
                 "name": ticket.title,
                 "details": ticket.description or "",
                 "team": ticket.team_token,
-                "type": ticket.category,
+                "type": "service" if ticket.category == 0 else "host",
                 "status": ticket.status
             }
         ]

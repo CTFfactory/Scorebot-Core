@@ -25,7 +25,12 @@ async def submit_tickets(request: Request):
             name = td.get("name")
             details = td.get("details")
             t_type = td.get("type", "service")
-            status = td.get("status", "open").lower()
+            if isinstance(t_type, int):
+                t_type = "service" if t_type == 0 else "host"
+            else:
+                t_type = str(t_type)
+            
+            status = str(td.get("status", "open")).lower()
             team_token = td.get("team")
 
             if not t_id or not name or not team_token:
