@@ -7,3 +7,5 @@ python-multipart
 netaddr
 pytz
 requests-oauthlib
+Pillow>=6.0.0
+

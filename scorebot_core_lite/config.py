@@ -77,3 +77,23 @@ X_API_KEY = os.getenv("X_API_KEY", "")
 X_API_SECRET = os.getenv("X_API_SECRET", "")
 X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN", "")
 X_ACCESS_SECRET = os.getenv("X_ACCESS_SECRET", "")
+
+def _get_static_dir():
+    env_dir = os.getenv("STATIC_DIR")
+    if env_dir:
+        return env_dir
+    
+    # Check production path
+    prod_path = "/opt/scorebot/current/scorebot_static"
+    if os.path.exists(prod_path) and os.access(prod_path, os.W_OK):
+        return prod_path
+        
+    # Check local repository folder (relative to this config.py file)
+    local_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scorebot_static"))
+    if os.path.exists(local_path) and os.access(local_path, os.W_OK):
+        return local_path
+        
+    return "./scorebot_static"
+
+STATIC_DIR = _get_static_dir()
+

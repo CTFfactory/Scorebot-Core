@@ -657,6 +657,18 @@
                                     <button type="submit" class="btn btn-sm btn-success">Save</button>
                                 </form>
 
+                                <!-- Logo upload panel -->
+                                <div style="margin: 0.5rem 0; padding: 0.5rem; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+                                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                        <strong>Team Logo:</strong>
+                                        ${team.logo ? `<img src="/${team.logo}" alt="Logo" style="max-height: 30px; max-width: 30px; object-fit: contain; border-radius: 4px; border: 1px solid var(--border-color); background: rgba(255,255,255,0.05);">` : '<span style="color: #9ca3af; font-size: 0.85rem;">None (using default.png)</span>'}
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                        <input type="file" id="logo-input-${team.id}" accept="image/png, image/jpeg, image/gif, image/webp, image/svg+xml" style="font-size: 0.8rem; background: transparent; border: none; padding: 0; max-width: 200px;">
+                                        <button type="button" class="btn btn-sm btn-info" onclick="uploadLogo(${team.id}, ${gameId})" title="Specs Required:&#10;- Square aspect ratio (1:1)&#10;- Min resolution: 300x300 pixels&#10;- Max file size: 2 MB&#10;- Allowed: PNG, SVG, JPEG, GIF, WebP" style="cursor: help;">Upload Logo</button>
+                                    </div>
+                                </div>
+
                                 <div style="margin: 0.5rem 0; padding: 0.5rem; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid var(--border-color);">
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <div><strong>Current Score:</strong> <span style="font-size: 1.1rem; color: #10b981; font-weight: 600;">${team.score || 0}</span></div>
@@ -1078,6 +1090,46 @@
                 toggleDetails(gameId);
             } else {
                 alert("Failed to cancel scheduled zero-out");
+            }
+        }
+
+        async function uploadLogo(teamId, gameId) {
+            const input = document.getElementById(`logo-input-${teamId}`);
+            if (!input.files || input.files.length === 0) {
+                alert("Please select an image file first.");
+                return;
+            }
+            const file = input.files[0];
+            
+            // Client side basic validation
+            if (file.size > 2 * 1024 * 1024) {
+                alert("Error: File exceeds the 2 MB limit.\n\nRequired Specifications:\n- Square aspect ratio (1:1)\n- Min resolution: 300x300 pixels\n- Max size: 2 MB\n- Allowed formats: PNG, SVG, JPEG, GIF, WebP");
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append("file", file);
+            
+            try {
+                const res = await fetch(`/api/admin/games/teams/${teamId}/logo`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Scorebot-Token': '{{ admin_token }}'
+                    },
+                    body: formData
+                });
+                
+                const data = await res.json();
+                if (res.ok) {
+                    alert("Logo uploaded successfully");
+                    toggleDetails(gameId); // refresh
+                    toggleDetails(gameId);
+                } else {
+                    const detailMsg = data.detail || "Unknown error";
+                    alert(`Failed to upload logo:\n${detailMsg}\n\nRequired Specifications:\n- Square aspect ratio (1:1)\n- Min resolution: 300x300 pixels\n- Max size: 2 MB\n- Allowed formats: PNG, SVG, JPEG, GIF, WebP`);
+                }
+            } catch (err) {
+                alert(`Error uploading file: ${err.message}`);
             }
         }
 
