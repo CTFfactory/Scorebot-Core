@@ -96,10 +96,13 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-# Mount StaticFiles to serve static assets (such as team logos)
+# Mount StaticFiles and MediaFiles to serve static assets & uploads
+from fastapi.staticfiles import StaticFiles
 if os.path.exists(config.STATIC_DIR):
-    from fastapi.staticfiles import StaticFiles
     app.mount("/static", StaticFiles(directory=config.STATIC_DIR), name="static")
+if os.path.exists(config.MEDIA_DIR):
+    app.mount("/upload", StaticFiles(directory=config.MEDIA_DIR), name="upload")
+
 
 
 # Include routers

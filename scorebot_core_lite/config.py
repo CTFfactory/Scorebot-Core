@@ -97,3 +97,26 @@ def _get_static_dir():
 
 STATIC_DIR = _get_static_dir()
 
+def _get_media_dir():
+    env_dir = os.getenv("MEDIA_DIR")
+    if env_dir:
+        return env_dir
+    
+    # Check production media path
+    prod_path = "/opt/scorebot/current/scorebot_media"
+    if os.path.exists(prod_path) and os.access(prod_path, os.W_OK):
+        return prod_path
+        
+    # Check local media folder in workspace
+    local_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scorebot_media"))
+    try:
+        os.makedirs(local_path, exist_ok=True)
+        return local_path
+    except Exception:
+        pass
+        
+    return "./scorebot_media"
+
+MEDIA_DIR = _get_media_dir()
+
+

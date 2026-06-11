@@ -914,7 +914,7 @@ async def upload_team_logo(team_id: int, file: UploadFile = File(...)):
 
         # 5. Create path and save file securely
         # Sanitize name based on team ID to prevent path traversal
-        logo_dir = os.path.join(config.STATIC_DIR, "img", "team")
+        logo_dir = config.MEDIA_DIR
         os.makedirs(logo_dir, exist_ok=True)
         
         logo_filename = f"team_{team_id}.{ext}"
@@ -924,8 +924,8 @@ async def upload_team_logo(team_id: int, file: UploadFile = File(...)):
             f.write(file_bytes)
         
         # 6. Update database model
-        # The scoreboard expects path like static/img/team/team_{team_id}.{ext}
-        relative_path = f"static/img/team/{logo_filename}"
+        # The scoreboard / users expect path like upload/team_{team_id}.{ext}
+        relative_path = f"upload/{logo_filename}"
         team.logo = relative_path
         session.commit()
         
