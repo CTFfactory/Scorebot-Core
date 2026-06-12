@@ -684,6 +684,16 @@
                                             </ul>
                                         </div>
                                     ` : ''}
+                                    ${team.purchases && team.purchases.length > 0 ? `
+                                        <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #9ca3af; border-top: 1px solid var(--border-color); padding-top: 0.5rem;">
+                                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Purchase History:</div>
+                                            <ul style="margin: 0; padding-left: 1.25rem; max-height: 100px; overflow-y: auto;">
+                                                ${team.purchases.map(p => `
+                                                    <li><strong style="color: #f87171;">-${p.amount}</strong>: ${p.item || 'Generic Item'} <span style="font-size: 0.7rem; color: #6b7280;">(${new Date(p.date).toLocaleString()})</span></li>
+                                                `).join('')}
+                                            </ul>
+                                        </div>
+                                    ` : ''}
                                 </div>
 
                                 <!-- Hosts Collapsible Section under Team -->

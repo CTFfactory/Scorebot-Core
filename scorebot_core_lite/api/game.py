@@ -420,6 +420,14 @@ def get_game_details(game_id: int):
                         "timestamp": adj.timestamp.isoformat() if adj.timestamp else None
                     } for adj in team.score_adjustments
                 ],
+                "purchases": [
+                    {
+                        "id": p.id,
+                        "item": p.item,
+                        "amount": p.amount,
+                        "date": p.date.isoformat() if p.date else None
+                    } for p in team.purchases
+                ],
                 "hosts": hosts_list
             })
             
