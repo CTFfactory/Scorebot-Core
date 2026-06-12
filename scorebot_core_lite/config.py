@@ -102,12 +102,21 @@ def _get_media_dir():
     if env_dir:
         return env_dir
     
-    # Check production media path
-    prod_path = "/opt/scorebot/current/scorebot_media"
-    if os.path.exists(prod_path) and os.access(prod_path, os.W_OK):
-        return prod_path
-        
-    # Check local media folder in workspace
+    # 1. Check/create /opt/scorebot/scorebot_media directly (writable by www-data in prod)
+    path1 = "/opt/scorebot/scorebot_media"
+    if os.path.exists("/opt/scorebot") and os.access("/opt/scorebot", os.W_OK):
+        try:
+            os.makedirs(path1, exist_ok=True)
+            return path1
+        except Exception:
+            pass
+
+    # 2. Check /opt/scorebot/current/scorebot_media
+    path2 = "/opt/scorebot/current/scorebot_media"
+    if os.path.exists(path2) and os.access(path2, os.W_OK):
+        return path2
+
+    # 3. Check local media folder in workspace
     local_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scorebot_media"))
     try:
         os.makedirs(local_path, exist_ok=True)
