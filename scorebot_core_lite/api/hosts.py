@@ -26,8 +26,8 @@ async def register_host(request: Request):
         if not team:
             raise HTTPException(status_code=404, detail="Team not found")
 
-        # Find or create host
-        host = session.query(Host).filter(Host.fqdn == dns, Host.team_id == team.id).first()
+        # Find or create host by FQDN
+        host = session.query(Host).filter(Host.fqdn == dns).first()
         if not host:
             host = Host(fqdn=dns, ip=ip, team_id=team.id, online=False)
             session.add(host)
@@ -35,6 +35,7 @@ async def register_host(request: Request):
             session.refresh(host)
         else:
             host.ip = ip
+            host.team_id = team.id
 
         # Register services
         services_list = body.get("services", [])
@@ -82,3 +83,19 @@ def deregister_host(host_id: int):
         return {"status": "success", "message": "Host deregistered"}
     finally:
         session.close()
+
+@router.delete("/api/hosts", dependencies=[Depends(verify_cli_token)])
+def deregister_host_by_fqdn(fqdn: str):
+    """Decommissions a host by mapping its team to None, stopping scoring, looking up by FQDN."""
+    session = SessionLocal()
+    try:
+        host = session.query(Host).filter(Host.fqdn == fqdn).first()
+        if not host:
+            raise HTTPException(status_code=404, detail="Host not found")
+
+        host.team_id = None
+        session.commit()
+        return {"status": "success", "message": "Host deregistered"}
+    finally:
+        session.close()
+
