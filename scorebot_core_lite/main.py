@@ -210,6 +210,59 @@ def prometheus_metrics():
                 amt = audit_map.get((team_id, source), 0)
                 lines.append(f'scorebot_team_score_by_source_total{{team_id="{team_id}",team_name="{team_name}",source="{source}"}} {amt}')
                 
+        # SQLite-specific metrics
+        if config.DATABASE_URL.startswith("sqlite"):
+            try:
+                from sqlalchemy import text
+                page_count = session.execute(text("PRAGMA page_count")).scalar()
+                page_size = session.execute(text("PRAGMA page_size")).scalar()
+                freelist_count = session.execute(text("PRAGMA freelist_count")).scalar()
+                
+                lines.append("# HELP sqlite_database_pages_total Total number of pages in the database")
+                lines.append("# TYPE sqlite_database_pages_total gauge")
+                lines.append(f"sqlite_database_pages_total {page_count}")
+                
+                lines.append("# HELP sqlite_page_size_bytes Database page size in bytes")
+                lines.append("# TYPE sqlite_page_size_bytes gauge")
+                lines.append(f"sqlite_page_size_bytes {page_size}")
+                
+                lines.append("# HELP sqlite_freelist_pages_total Number of unused pages on the freelist")
+                lines.append("# TYPE sqlite_freelist_pages_total gauge")
+                lines.append(f"sqlite_freelist_pages_total {freelist_count}")
+                
+                lines.append("# HELP sqlite_database_size_bytes Calculated size of the database in bytes")
+                lines.append("# TYPE sqlite_database_size_bytes gauge")
+                lines.append(f"sqlite_database_size_bytes {page_count * page_size}")
+                
+                # Try to get actual file sizes from disk if possible
+                db_url = config.DATABASE_URL
+                db_path = None
+                if db_url.startswith("sqlite:////"):
+                    db_path = db_url[len("sqlite:///"):].rstrip("/")
+                elif db_url.startswith("sqlite:///"):
+                    db_path = db_url[len("sqlite:///"):].rstrip("/")
+                
+                if db_path and os.path.exists(db_path):
+                    lines.append("# HELP sqlite_file_size_bytes Actual database file size on disk in bytes")
+                    lines.append("# TYPE sqlite_file_size_bytes gauge")
+                    lines.append(f"sqlite_file_size_bytes {os.path.getsize(db_path)}")
+                    
+                    wal_path = f"{db_path}-wal"
+                    shm_path = f"{db_path}-shm"
+                    
+                    wal_size = os.path.getsize(wal_path) if os.path.exists(wal_path) else 0
+                    shm_size = os.path.getsize(shm_path) if os.path.exists(shm_path) else 0
+                    
+                    lines.append("# HELP sqlite_wal_file_size_bytes SQLite WAL file size on disk in bytes")
+                    lines.append("# TYPE sqlite_wal_file_size_bytes gauge")
+                    lines.append(f"sqlite_wal_file_size_bytes {wal_size}")
+                    
+                    lines.append("# HELP sqlite_shm_file_size_bytes SQLite SHM file size on disk in bytes")
+                    lines.append("# TYPE sqlite_shm_file_size_bytes gauge")
+                    lines.append(f"sqlite_shm_file_size_bytes {shm_size}")
+            except Exception as e:
+                logger.warning(f"Failed to collect SQLite metrics: {e}")
+
         return Response(content="\n".join(lines) + "\n", media_type="text/plain")
     finally:
         session.close()
