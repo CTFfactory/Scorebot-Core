@@ -100,8 +100,13 @@ templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 from fastapi.staticfiles import StaticFiles
 if os.path.exists(config.STATIC_DIR):
     app.mount("/static", StaticFiles(directory=config.STATIC_DIR), name="static")
-if os.path.exists(config.MEDIA_DIR):
-    app.mount("/upload", StaticFiles(directory=config.MEDIA_DIR), name="upload")
+
+try:
+    os.makedirs(config.MEDIA_DIR, exist_ok=True)
+except Exception as e:
+    logger.warning("Failed to create MEDIA_DIR %s: %s", config.MEDIA_DIR, e)
+
+app.mount("/upload", StaticFiles(directory=config.MEDIA_DIR), name="upload")
 
 
 

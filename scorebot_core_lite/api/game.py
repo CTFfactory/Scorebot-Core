@@ -411,6 +411,7 @@ def get_game_details(game_id: int):
                 "minimal": team.minimal,
                 "token": team.token,
                 "visible": team.visible is not False,
+                "logo": team.logo,
                 "score": team.get_score(),
                 "score_adjustments": [
                     {
