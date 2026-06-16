@@ -190,7 +190,7 @@ def import_game(data: GameImportSchema):
                         name=svc_spec.name[:64],
                         value=svc_spec.points,
                         bonus=False,
-                        application="ping",
+                        application=svc_spec.application[:64],
                         protocol=proto,
                         status=2,  # timeout / offline until first score
                         host_id=host.id,
