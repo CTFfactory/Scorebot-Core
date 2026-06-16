@@ -166,7 +166,7 @@ class Host(Base):
     scored = Column(DateTime, nullable=True)
     ip = Column(String(50), nullable=True)
     ping_last = Column(Integer, default=0)
-    team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="CASCADE"), nullable=False)
+    team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="CASCADE"), nullable=True)
 
     team = relationship("GameTeam", back_populates="hosts")
     services = relationship("Service", back_populates="host", cascade="all, delete-orphan")

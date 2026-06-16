@@ -27,14 +27,16 @@ async def register_host(request: Request):
             raise HTTPException(status_code=404, detail="Team not found")
 
         # Find or create host by FQDN
+        host_short_name = dns.split(".")[0] if "." in dns else dns
         host = session.query(Host).filter(Host.fqdn == dns).first()
         if not host:
-            host = Host(fqdn=dns, ip=ip, team_id=team.id, online=False)
+            host = Host(fqdn=dns, ip=ip, name=host_short_name, team_id=team.id, online=False)
             session.add(host)
             session.commit()
             session.refresh(host)
         else:
             host.ip = ip
+            host.name = host_short_name
             host.team_id = team.id
 
         # Register services
