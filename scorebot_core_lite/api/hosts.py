@@ -18,7 +18,7 @@ async def register_host(request: Request):
         ip = body.get("ip")
         dns = body.get("dns")
 
-        if not team_token or not ip or not dns:
+        if not team_token or ip is None or not dns:
             raise HTTPException(status_code=400, detail="Missing team, ip or dns fields")
 
         # Find team
