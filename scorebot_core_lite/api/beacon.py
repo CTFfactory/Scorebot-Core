@@ -152,6 +152,20 @@ def resolve_dns(fqdn, dns_server):
                 parts = target_team.subnet.split('.')
                 if len(parts) >= 3:
                     dns_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.68"
+            if not dns_ip and target_team.game:
+                for t in target_team.game.teams:
+                    if t.subnet:
+                        parts = t.subnet.split('.')
+                        if len(parts) >= 3:
+                            dns_ip = f"{parts[0]}.{parts[1]}.{target_team.id}.68"
+                            break
+            if not dns_ip:
+                import os
+                beacon_ip = config.BEACON_IP or os.getenv("BEACON_IP")
+                if beacon_ip:
+                    parts = beacon_ip.split('.')
+                    if len(parts) >= 3:
+                        dns_ip = f"{parts[0]}.{parts[1]}.{target_team.id}.68"
             if not dns_ip:
                 dns_ip = f"100.64.{target_team.id}.68"
 

@@ -186,6 +186,21 @@ class Host(Base):
             parts = self.team.subnet.split('.')
             if len(parts) >= 3:
                 dns_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.68"
+        if not dns_ip and self.team and self.team.game:
+            for t in self.team.game.teams:
+                if t.subnet:
+                    parts = t.subnet.split('.')
+                    if len(parts) >= 3:
+                        dns_ip = f"{parts[0]}.{parts[1]}.{self.team.id}.68"
+                        break
+        if not dns_ip:
+            import os
+            beacon_ip = config.BEACON_IP or os.getenv("BEACON_IP")
+            if beacon_ip:
+                parts = beacon_ip.split('.')
+                if len(parts) >= 3:
+                    team_idx = self.team.id if self.team else 1
+                    dns_ip = f"{parts[0]}.{parts[1]}.{team_idx}.68"
         if not dns_ip:
             team_idx = self.team.id if self.team else 1
             dns_ip = f"100.64.{team_idx}.68"
