@@ -74,7 +74,60 @@ async def checkin_beacon(request: Request):
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid IP Address")
 
-        # 2. Look up host in the same running game
+import socket
+
+def resolve_dns(fqdn, dns_server):
+    # Construct DNS query packet
+    packet = bytearray(b'\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00')
+    for part in fqdn.split('.'):
+        packet.append(len(part))
+        packet.extend(part.encode('ascii'))
+    packet.append(0)
+    packet.extend(b'\x00\x01')  # Type A
+    packet.extend(b'\x00\x01')  # Class IN
+    
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(1.5)
+    try:
+        sock.sendto(packet, (dns_server, 53))
+        data, _ = sock.recvfrom(512)
+        if len(data) < 12:
+            return None
+        ancount = int.from_bytes(data[6:8], 'big')
+        if ancount == 0:
+            return None
+        
+        idx = 12
+        while data[idx] != 0:
+            idx += data[idx] + 1
+        idx += 5 # skip final \x00, Qtype, Qclass
+        
+        for _ in range(ancount):
+            if idx >= len(data):
+                break
+            if (data[idx] & 0xc0) == 0xc0:
+                idx += 2
+            else:
+                while data[idx] != 0:
+                    idx += data[idx] + 1
+                idx += 1
+            atype = int.from_bytes(data[idx:idx+2], 'big')
+            idx += 2
+            idx += 2 # class
+            idx += 4 # ttl
+            rdlength = int.from_bytes(data[idx:idx+2], 'big')
+            idx += 2
+            if atype == 1 and rdlength == 4:
+                ip_bytes = data[idx:idx+4]
+                return f"{ip_bytes[0]}.{ip_bytes[1]}.{ip_bytes[2]}.{ip_bytes[3]}"
+            idx += rdlength
+    except Exception:
+        pass
+    finally:
+        sock.close()
+    return None
+
+# 2. Look up host in the same running game
         host = session.query(Host).join(GameTeam).filter(
             Host.ip == address_raw,
             GameTeam.game_id == attacker_team.game_id
@@ -91,6 +144,26 @@ async def checkin_beacon(request: Request):
                         break
                 except Exception:
                     continue
+
+        if not host and target_team:
+            # Try to resolve the host dynamically using DNS
+            dns_ip = None
+            if target_team.subnet:
+                parts = target_team.subnet.split('.')
+                if len(parts) >= 3:
+                    dns_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.68"
+            if not dns_ip:
+                dns_ip = f"100.64.{target_team.id}.68"
+
+            for h in target_team.hosts:
+                resolved_ip = resolve_dns(h.fqdn, dns_ip)
+                if resolved_ip == address_raw:
+                    host = h
+                    # Dynamically update the host's IP in the DB for cache/consistency
+                    host.ip = address_raw
+                    session.add(host)
+                    session.commit()
+                    break
 
         if not host and not target_team:
             raise HTTPException(status_code=404, detail="Host does not exist")

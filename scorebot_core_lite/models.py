@@ -181,8 +181,14 @@ class Host(Base):
         }
 
     def get_json_job(self):
-        team_idx = (self.team.id - 1) if self.team else 0
-        dns_ip = f"100.64.{team_idx}.68"
+        dns_ip = None
+        if self.team and self.team.subnet:
+            parts = self.team.subnet.split('.')
+            if len(parts) >= 3:
+                dns_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.68"
+        if not dns_ip:
+            team_idx = self.team.id if self.team else 1
+            dns_ip = f"100.64.{team_idx}.68"
         return {
             "host": {
                 "fqdn": self.fqdn,
