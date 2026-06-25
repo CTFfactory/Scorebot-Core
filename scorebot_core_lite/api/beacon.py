@@ -1,5 +1,6 @@
 import datetime
 import uuid
+import socket
 from fastapi import APIRouter, HTTPException, Depends, Request
 from scorebot_core_lite.models import (
     SessionLocal, GameTeam, GameTeamBeaconToken, Host, GameCompromise, GameCompromiseHost, Game, Service
@@ -9,6 +10,57 @@ from scorebot_core_lite.scoring.notifications import send_notification
 from netaddr import IPNetwork, IPAddress
 
 from scorebot_core_lite import config
+
+def resolve_dns(fqdn, dns_server):
+    # Construct DNS query packet
+    packet = bytearray(b'\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00')
+    for part in fqdn.split('.'):
+        packet.append(len(part))
+        packet.extend(part.encode('ascii'))
+    packet.append(0)
+    packet.extend(b'\x00\x01')  # Type A
+    packet.extend(b'\x00\x01')  # Class IN
+    
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(1.5)
+    try:
+        sock.sendto(packet, (dns_server, 53))
+        data, _ = sock.recvfrom(512)
+        if len(data) < 12:
+            return None
+        ancount = int.from_bytes(data[6:8], 'big')
+        if ancount == 0:
+            return None
+        
+        idx = 12
+        while data[idx] != 0:
+            idx += data[idx] + 1
+        idx += 5 # skip final \x00, Qtype, Qclass
+        
+        for _ in range(ancount):
+            if idx >= len(data):
+                break
+            if (data[idx] & 0xc0) == 0xc0:
+                idx += 2
+            else:
+                while data[idx] != 0:
+                    idx += data[idx] + 1
+                idx += 1
+            atype = int.from_bytes(data[idx:idx+2], 'big')
+            idx += 2
+            idx += 2 # class
+            idx += 4 # ttl
+            rdlength = int.from_bytes(data[idx:idx+2], 'big')
+            idx += 2
+            if atype == 1 and rdlength == 4:
+                ip_bytes = data[idx:idx+4]
+                return f"{ip_bytes[0]}.{ip_bytes[1]}.{ip_bytes[2]}.{ip_bytes[3]}"
+            idx += rdlength
+    except Exception:
+        pass
+    finally:
+        sock.close()
+    return None
 
 router = APIRouter()
 
@@ -74,58 +126,6 @@ async def checkin_beacon(request: Request):
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid IP Address")
 
-import socket
-
-def resolve_dns(fqdn, dns_server):
-    # Construct DNS query packet
-    packet = bytearray(b'\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00')
-    for part in fqdn.split('.'):
-        packet.append(len(part))
-        packet.extend(part.encode('ascii'))
-    packet.append(0)
-    packet.extend(b'\x00\x01')  # Type A
-    packet.extend(b'\x00\x01')  # Class IN
-    
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(1.5)
-    try:
-        sock.sendto(packet, (dns_server, 53))
-        data, _ = sock.recvfrom(512)
-        if len(data) < 12:
-            return None
-        ancount = int.from_bytes(data[6:8], 'big')
-        if ancount == 0:
-            return None
-        
-        idx = 12
-        while data[idx] != 0:
-            idx += data[idx] + 1
-        idx += 5 # skip final \x00, Qtype, Qclass
-        
-        for _ in range(ancount):
-            if idx >= len(data):
-                break
-            if (data[idx] & 0xc0) == 0xc0:
-                idx += 2
-            else:
-                while data[idx] != 0:
-                    idx += data[idx] + 1
-                idx += 1
-            atype = int.from_bytes(data[idx:idx+2], 'big')
-            idx += 2
-            idx += 2 # class
-            idx += 4 # ttl
-            rdlength = int.from_bytes(data[idx:idx+2], 'big')
-            idx += 2
-            if atype == 1 and rdlength == 4:
-                ip_bytes = data[idx:idx+4]
-                return f"{ip_bytes[0]}.{ip_bytes[1]}.{ip_bytes[2]}.{ip_bytes[3]}"
-            idx += rdlength
-    except Exception:
-        pass
-    finally:
-        sock.close()
-    return None
 
 # 2. Look up host in the same running game
         host = session.query(Host).join(GameTeam).filter(
