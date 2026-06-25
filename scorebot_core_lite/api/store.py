@@ -4,12 +4,12 @@ from scorebot_core_lite.auth import verify_store_token
 
 router = APIRouter()
 
-@router.get("/api/store/{team_id}/rate", dependencies=[Depends(verify_store_token)])
-def get_exchange_rate(team_id: int):
-    """Retrieve exchange rate for storefront ID."""
+@router.get("/api/store/{team_token}/rate", dependencies=[Depends(verify_store_token)])
+def get_exchange_rate(team_token: str):
+    """Retrieve exchange rate for team token."""
     session = SessionLocal()
     try:
-        team = session.query(GameTeam).filter(GameTeam.store == team_id).first()
+        team = session.query(GameTeam).filter(GameTeam.token == team_token).first()
         if not team or team.game.status != 1:
             raise HTTPException(status_code=404, detail="Active Team not found")
         rate = float(team.game.score_exchange_rate) / 100.0
@@ -27,13 +27,13 @@ async def make_purchase(request: Request):
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid JSON")
 
-        team_store_id = body.get("team")
+        team_token = body.get("team")
         order_list = body.get("order")
 
-        if not team_store_id or not isinstance(order_list, list):
+        if not team_token or not isinstance(order_list, list):
             raise HTTPException(status_code=400, detail="Missing team or order array")
 
-        team = session.query(GameTeam).filter(GameTeam.store == int(team_store_id)).first()
+        team = session.query(GameTeam).filter(GameTeam.token == team_token).first()
         if not team or team.game.status != 1:
             raise HTTPException(status_code=404, detail="Active Team not found")
 
