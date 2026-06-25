@@ -929,8 +929,19 @@ async def upload_team_logo(team_id: int, file: UploadFile = File(...)):
         logo_filename = f"team_{team_id}.{ext}"
         logo_path = os.path.join(logo_dir, logo_filename)
         
-        with open(logo_path, "wb") as f:
-            f.write(file_bytes)
+        if ext == 'svg':
+            with open(logo_path, "wb") as f:
+                f.write(file_bytes)
+        else:
+            # Resize image to exactly 300x300 for optimal display size on the scoreboard
+            if img.width > 300:
+                try:
+                    resample_filter = Image.Resampling.LANCZOS
+                except AttributeError:
+                    resample_filter = Image.ANTIALIAS
+                img = img.resize((300, 300), resample_filter)
+            # Save optimized
+            img.save(logo_path, format=img.format, optimize=True)
         
         # 6. Update database model
         # The scoreboard / users expect path like upload/team_{team_id}.{ext}
