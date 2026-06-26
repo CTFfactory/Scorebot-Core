@@ -803,157 +803,155 @@ async def upload_team_logo(team_id: int, file: UploadFile = File(...)):
     (must be square 1:1, minimum 300x300 pixels). 
     SVG files are parsed securely to reject scripts/inline JS events (XSS/XXE mitigation).
     """
-    # 1. Check if team exists
+    # 1. Validate file extension
+    filename = file.filename or ""
+    ext = os.path.splitext(filename.lower())[1].lstrip('.')
+    allowed_exts = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
+    if ext not in allowed_exts:
+        raise HTTPException(status_code=400, detail=f"Invalid file extension. Allowed: {', '.join(allowed_exts)}")
+
+    # 2. Read up to 2MB + 1 byte chunk by chunk to check size
+    max_bytes = 2 * 1024 * 1024
+    file_bytes = bytearray()
+    while True:
+        chunk = await file.read(65536)
+        if not chunk:
+            break
+        file_bytes.extend(chunk)
+        if len(file_bytes) > max_bytes:
+            raise HTTPException(status_code=413, detail="File too large. Maximum size allowed is 2 MB.")
+
+    # 3. Check magic bytes / headers to prevent extension spoofing
+    # And validate dimensions
+    if ext == 'svg':
+        # Parse SVG securely to prevent XXE / XSS
+        try:
+            # ET.fromstring in python 3 does not resolve external entities by default
+            root = ET.fromstring(file_bytes)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid SVG file format.")
+        
+        # recursive XSS prevention
+        for elem in root.iter():
+            tag = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag
+            if tag.lower() == 'script':
+                raise HTTPException(status_code=400, detail="Security validation failed: SVG contains <script> tag.")
+            for attr, val in elem.attrib.items():
+                attr_name = attr.split('}')[-1] if '}' in attr else attr
+                if attr_name.lower().startswith('on'):
+                    raise HTTPException(status_code=400, detail="Security validation failed: SVG contains inline JavaScript event handler.")
+                if attr_name.lower() in ('href', 'xlink:href') and val.lower().strip().startswith('javascript:'):
+                    raise HTTPException(status_code=400, detail="Security validation failed: SVG contains a javascript: link.")
+
+        # Validate aspect ratio / dimensions
+        width_val = root.attrib.get('width')
+        height_val = root.attrib.get('height')
+        viewbox_val = root.attrib.get('viewBox')
+        
+        is_square = False
+        min_size_ok = False
+        
+        if width_val and height_val:
+            try:
+                def clean_unit(v):
+                    return float(''.join(c for c in v if c.isdigit() or c == '.'))
+                w = clean_unit(width_val)
+                h = clean_unit(height_val)
+                is_square = (w == h)
+                min_size_ok = (w >= 300)
+            except Exception:
+                pass
+        
+        if not is_square and viewbox_val:
+            try:
+                parts = [float(x) for x in viewbox_val.strip().split()]
+                if len(parts) == 4:
+                    w = parts[2]
+                    h = parts[3]
+                    is_square = (w == h)
+                    min_size_ok = (w >= 300)
+            except Exception:
+                pass
+        
+        if not is_square:
+            raise HTTPException(status_code=400, detail="Image validation failed: SVG must have a square aspect ratio (1:1) in width/height or viewBox.")
+        if not min_size_ok:
+            raise HTTPException(status_code=400, detail="Image validation failed: SVG must have a minimum resolution of 300x300 pixels in width/height or viewBox.")
+    
+    else:
+        # Raster images (PNG, JPEG, GIF, WebP)
+        # Verify Magic Bytes
+        magic_ok = False
+        if ext == 'png' and file_bytes[:4] == b'\x89PNG':
+            magic_ok = True
+        elif ext in ('jpg', 'jpeg') and file_bytes[:3] == b'\xff\xd8\xff':
+            magic_ok = True
+        elif ext == 'gif' and file_bytes[:4] == b'GIF8':
+            magic_ok = True
+        elif ext == 'webp' and file_bytes[:4] == b'RIFF' and b'WEBP' in file_bytes[8:16]:
+            magic_ok = True
+            
+        if not magic_ok:
+            raise HTTPException(status_code=400, detail=f"Magic bytes mismatch: file does not match target {ext} format.")
+        
+        try:
+            img = Image.open(io.BytesIO(file_bytes))
+            img.verify()
+            # Re-open after verify() because verify() invalidates the image object
+            img = Image.open(io.BytesIO(file_bytes))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid image file format.")
+        
+        # Check aspect ratio (must be square 1:1)
+        if img.width != img.height:
+            raise HTTPException(status_code=400, detail=f"Image validation failed: Image must be a perfect square (1:1 aspect ratio). Uploaded dimensions: {img.width}x{img.height} pixels.")
+        
+        # Check minimum size (must be at least 300x300)
+        if img.width < 300:
+            raise HTTPException(status_code=400, detail=f"Image validation failed: Image must be at least 300x300 pixels. Uploaded dimensions: {img.width}x{img.height} pixels.")
+
+    # 4. Create path and save file securely
+    logo_dir = config.MEDIA_DIR
+    os.makedirs(logo_dir, exist_ok=True)
+    
+    logo_filename = f"team_{team_id}.{ext}"
+    logo_path = os.path.join(logo_dir, logo_filename)
+    
+    if ext == 'svg':
+        with open(logo_path, "wb") as f:
+            f.write(file_bytes)
+    else:
+        # Resize image to exactly 300x300 for optimal display size on the scoreboard
+        if img.width > 300:
+            try:
+                resample_filter = Image.Resampling.LANCZOS
+            except AttributeError:
+                resample_filter = Image.ANTIALIAS
+            img = img.resize((300, 300), resample_filter)
+        # Save optimized
+        img.save(logo_path, format=img.format, optimize=True)
+    
+    # 5. Open database session to update the team logo record
+    relative_path = f"upload/{logo_filename}"
     session = SessionLocal()
     try:
         team = session.query(GameTeam).filter(GameTeam.id == team_id).first()
         if not team:
+            try:
+                os.remove(logo_path)
+            except Exception:
+                pass
             raise HTTPException(status_code=404, detail="Team not found")
-        
-        # 2. Validate file extension
-        filename = file.filename or ""
-        ext = os.path.splitext(filename.lower())[1].lstrip('.')
-        allowed_exts = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
-        if ext not in allowed_exts:
-            raise HTTPException(status_code=400, detail=f"Invalid file extension. Allowed: {', '.join(allowed_exts)}")
-
-        # 3. Read up to 2MB + 1 byte chunk by chunk to check size
-        max_bytes = 2 * 1024 * 1024
-        file_bytes = bytearray()
-        while True:
-            chunk = await file.read(65536)
-            if not chunk:
-                break
-            file_bytes.extend(chunk)
-            if len(file_bytes) > max_bytes:
-                raise HTTPException(status_code=413, detail="File too large. Maximum size allowed is 2 MB.")
-
-        # 4. Check magic bytes / headers to prevent extension spoofing
-        # And validate dimensions
-        if ext == 'svg':
-            # Parse SVG securely to prevent XXE / XSS
-            try:
-                # ET.fromstring in python 3 does not resolve external entities by default
-                root = ET.fromstring(file_bytes)
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid SVG file format.")
-            
-            # recursive XSS prevention
-            for elem in root.iter():
-                tag = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag
-                if tag.lower() == 'script':
-                    raise HTTPException(status_code=400, detail="Security validation failed: SVG contains <script> tag.")
-                for attr, val in elem.attrib.items():
-                    attr_name = attr.split('}')[-1] if '}' in attr else attr
-                    if attr_name.lower().startswith('on'):
-                        raise HTTPException(status_code=400, detail="Security validation failed: SVG contains inline JavaScript event handler.")
-                    if attr_name.lower() in ('href', 'xlink:href') and val.lower().strip().startswith('javascript:'):
-                        raise HTTPException(status_code=400, detail="Security validation failed: SVG contains a javascript: link.")
-
-            # Validate aspect ratio / dimensions
-            width_val = root.attrib.get('width')
-            height_val = root.attrib.get('height')
-            viewbox_val = root.attrib.get('viewBox')
-            
-            is_square = False
-            min_size_ok = False
-            
-            if width_val and height_val:
-                try:
-                    def clean_unit(v):
-                        return float(''.join(c for c in v if c.isdigit() or c == '.'))
-                    w = clean_unit(width_val)
-                    h = clean_unit(height_val)
-                    is_square = (w == h)
-                    min_size_ok = (w >= 300)
-                except Exception:
-                    pass
-            
-            if not is_square and viewbox_val:
-                try:
-                    parts = [float(x) for x in viewbox_val.strip().split()]
-                    if len(parts) == 4:
-                        w = parts[2]
-                        h = parts[3]
-                        is_square = (w == h)
-                        min_size_ok = (w >= 300)
-                except Exception:
-                    pass
-            
-            if not is_square:
-                raise HTTPException(status_code=400, detail="Image validation failed: SVG must have a square aspect ratio (1:1) in width/height or viewBox.")
-            if not min_size_ok:
-                raise HTTPException(status_code=400, detail="Image validation failed: SVG must have a minimum resolution of 300x300 pixels in width/height or viewBox.")
-        
-        else:
-            # Raster images (PNG, JPEG, GIF, WebP)
-            # Verify Magic Bytes
-            # PNG starts with 89 50 4E 47
-            # JPEG starts with FF D8 FF
-            # GIF starts with 47 49 46 38
-            # WebP starts with 52 49 46 46 (RIFF) ... 57 45 42 50 (WEBP)
-            magic_ok = False
-            if ext == 'png' and file_bytes[:4] == b'\x89PNG':
-                magic_ok = True
-            elif ext in ('jpg', 'jpeg') and file_bytes[:3] == b'\xff\xd8\xff':
-                magic_ok = True
-            elif ext == 'gif' and file_bytes[:4] == b'GIF8':
-                magic_ok = True
-            elif ext == 'webp' and file_bytes[:4] == b'RIFF' and b'WEBP' in file_bytes[8:16]:
-                magic_ok = True
-                
-            if not magic_ok:
-                raise HTTPException(status_code=400, detail=f"Magic bytes mismatch: file does not match target {ext} format.")
-            
-            try:
-                img = Image.open(io.BytesIO(file_bytes))
-                img.verify()
-                # Re-open after verify() because verify() invalidates the image object
-                img = Image.open(io.BytesIO(file_bytes))
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid image file format.")
-            
-            # Check aspect ratio (must be square 1:1)
-            if img.width != img.height:
-                raise HTTPException(status_code=400, detail=f"Image validation failed: Image must be a perfect square (1:1 aspect ratio). Uploaded dimensions: {img.width}x{img.height} pixels.")
-            
-            # Check minimum size (must be at least 300x300)
-            if img.width < 300:
-                raise HTTPException(status_code=400, detail=f"Image validation failed: Image must be at least 300x300 pixels. Uploaded dimensions: {img.width}x{img.height} pixels.")
-
-        # 5. Create path and save file securely
-        # Sanitize name based on team ID to prevent path traversal
-        logo_dir = config.MEDIA_DIR
-        os.makedirs(logo_dir, exist_ok=True)
-        
-        logo_filename = f"team_{team_id}.{ext}"
-        logo_path = os.path.join(logo_dir, logo_filename)
-        
-        if ext == 'svg':
-            with open(logo_path, "wb") as f:
-                f.write(file_bytes)
-        else:
-            # Resize image to exactly 300x300 for optimal display size on the scoreboard
-            if img.width > 300:
-                try:
-                    resample_filter = Image.Resampling.LANCZOS
-                except AttributeError:
-                    resample_filter = Image.ANTIALIAS
-                img = img.resize((300, 300), resample_filter)
-            # Save optimized
-            img.save(logo_path, format=img.format, optimize=True)
-        
-        # 6. Update database model
-        # The scoreboard / users expect path like upload/team_{team_id}.{ext}
-        relative_path = f"upload/{logo_filename}"
         team.logo = relative_path
         session.commit()
-        
         return {
             "status": "success",
             "message": "Logo uploaded successfully",
             "logo_path": relative_path
         }
+    except Exception as e:
+        session.rollback()
+        raise e
     finally:
         session.close()
 
