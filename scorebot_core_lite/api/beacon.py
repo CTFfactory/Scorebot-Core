@@ -22,7 +22,7 @@ def resolve_dns(fqdn, dns_server):
     packet.extend(b'\x00\x01')  # Class IN
     
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(1.5)
+    sock.settimeout(0.1)
     try:
         sock.sendto(packet, (dns_server, 53))
         data, _ = sock.recvfrom(512)
@@ -134,6 +134,8 @@ async def checkin_beacon(request: Request):
         ).first()
 
         target_team = None
+        hosts_to_resolve = []
+        dns_ip = None
         if not host:
             # Try to resolve target team subnet
             for t in attacker_team.game.teams:
@@ -145,39 +147,68 @@ async def checkin_beacon(request: Request):
                 except Exception:
                     continue
 
-        if not host and target_team:
-            # Try to resolve the host dynamically using DNS
-            dns_ip = None
-            if target_team.subnet:
-                parts = target_team.subnet.split('.')
-                if len(parts) >= 3:
-                    dns_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.68"
-            if not dns_ip and target_team.game:
-                for t in target_team.game.teams:
-                    if t.subnet:
-                        parts = t.subnet.split('.')
+            if target_team:
+                if target_team.subnet:
+                    parts = target_team.subnet.split('.')
+                    if len(parts) >= 3:
+                        dns_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.68"
+                if not dns_ip and target_team.game:
+                    for t in target_team.game.teams:
+                        if t.subnet:
+                            parts = t.subnet.split('.')
+                            if len(parts) >= 3:
+                                dns_ip = f"{parts[0]}.{parts[1]}.{target_team.id}.68"
+                                break
+                if not dns_ip:
+                    import os
+                    beacon_ip = config.BEACON_IP or os.getenv("BEACON_IP")
+                    if beacon_ip:
+                        parts = beacon_ip.split('.')
                         if len(parts) >= 3:
                             dns_ip = f"{parts[0]}.{parts[1]}.{target_team.id}.68"
-                            break
-            if not dns_ip:
-                import os
-                beacon_ip = config.BEACON_IP or os.getenv("BEACON_IP")
-                if beacon_ip:
-                    parts = beacon_ip.split('.')
-                    if len(parts) >= 3:
-                        dns_ip = f"{parts[0]}.{parts[1]}.{target_team.id}.68"
-            if not dns_ip:
-                dns_ip = f"100.64.{target_team.id}.68"
+                if not dns_ip:
+                    dns_ip = f"100.64.{target_team.id}.68"
 
-            for h in target_team.hosts:
-                resolved_ip = resolve_dns(h.fqdn, dns_ip)
+                hosts_to_resolve = [(h.id, h.fqdn) for h in target_team.hosts]
+
+        # Release database session while doing long/blocking network/DNS queries
+        session.close()
+
+        resolved_host_id = None
+        if hosts_to_resolve and dns_ip:
+            for h_id, h_fqdn in hosts_to_resolve:
+                resolved_ip = resolve_dns(h_fqdn, dns_ip)
                 if resolved_ip == address_raw:
-                    host = h
-                    # Dynamically update the host's IP in the DB for cache/consistency
-                    host.ip = address_raw
-                    session.add(host)
-                    session.commit()
+                    resolved_host_id = h_id
                     break
+
+        # Reopen database session for write/commits
+        session = SessionLocal()
+        bt = session.query(GameTeamBeaconToken).filter(GameTeamBeaconToken.token == beacon_token).first()
+        attacker_team = bt.team
+
+        if resolved_host_id:
+            host = session.query(Host).filter(Host.id == resolved_host_id).first()
+            if host:
+                host.ip = address_raw
+                session.add(host)
+                session.commit()
+        else:
+            host = session.query(Host).join(GameTeam).filter(
+                Host.ip == address_raw,
+                GameTeam.game_id == attacker_team.game_id
+            ).first()
+
+        if not host:
+            target_team = None
+            for t in attacker_team.game.teams:
+                try:
+                    net = IPNetwork(t.subnet)
+                    if ip in net:
+                        target_team = t
+                        break
+                except Exception:
+                    continue
 
         if not host and not target_team:
             raise HTTPException(status_code=404, detail="Host does not exist")
