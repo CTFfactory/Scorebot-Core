@@ -123,14 +123,19 @@ class GameTeam(Base):
     def get_json_scoreboard(self):
         # Calculate captured flags by this team (captured relationship mapping)
         from sqlalchemy.orm import object_session
-        session = object_session(self) or db_session
-        captured_flags_count = len(session.query(Flag).filter(Flag.captured_team_id == self.id).all())
-        open_flags = len([f for f in self.flags if f.enabled and f.captured_team_id is None])
-        lost_flags = len([f for f in self.flags if f.enabled and f.captured_team_id is not None])
-        open_tickets = len([t for t in self.tickets if not t.closed])
-        closed_tickets = len([t for t in self.tickets if t.closed])
+        session = object_session(self)
+        close_session = False
+        if session is None:
+            session = SessionLocal()
+            close_session = True
+        try:
+            captured_flags_count = len(session.query(Flag).filter(Flag.captured_team_id == self.id).all())
+            open_flags = len([f for f in self.flags if f.enabled and f.captured_team_id is None])
+            lost_flags = len([f for f in self.flags if f.enabled and f.captured_team_id is not None])
+            open_tickets = len([t for t in self.tickets if not t.closed])
+            closed_tickets = len([t for t in self.tickets if t.closed])
 
-        return {
+            return {
             "id": self.id,
             "name": self.name,
             "color": f"#{hex(self.color).replace('0x', '').zfill(6)}",
@@ -150,6 +155,9 @@ class GameTeam(Base):
             "beacons": self.get_beacons(),
             "minimal": self.minimal,
         }
+        finally:
+            if close_session:
+                session.close()
 
     def get_json_mapper(self):
         return {"name": self.name, "token": self.token, "id": self.id}
@@ -289,8 +297,15 @@ class Flag(Base):
     @classmethod
     def query_by_captured_team(cls, session, team_id):
         # Helper to query flags captured by a specific team ID
-        s = session or db_session
-        return s.query(cls).filter(cls.captured_team_id == team_id).all()
+        close_session = False
+        if session is None:
+            session = SessionLocal()
+            close_session = True
+        try:
+            return session.query(cls).filter(cls.captured_team_id == team_id).all()
+        finally:
+            if close_session:
+                session.close()
 
 
 class Job(Base):
@@ -432,7 +447,6 @@ class ScoreHistory(Base):
 
 engine = create_engine(config.DATABASE_URL, connect_args={"check_same_thread": False, "timeout": 30} if config.DATABASE_URL.startswith("sqlite") else {})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-db_session = SessionLocal()
 
 from sqlalchemy import event
 @event.listens_for(engine, "connect")
