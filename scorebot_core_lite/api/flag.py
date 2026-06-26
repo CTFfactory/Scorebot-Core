@@ -23,19 +23,24 @@ async def capture_flag(request: Request):
         if not team_token or not flag_val:
             raise HTTPException(status_code=400, detail="Missing token or flag")
 
-        # 1. Authenticate attacker team
-        attacker = session.query(GameTeam).filter(GameTeam.token == team_token).first()
+        # Lock the attacker team row before reading game status or modifying score,
+        # to prevent lost-update races with concurrent score_round ticks.
+        attacker = session.query(GameTeam).filter(
+            GameTeam.token == team_token
+        ).with_for_update().first()
         if not attacker:
             raise HTTPException(status_code=403, detail="Invalid Team Token")
 
         if attacker.game.status != 1:
             raise HTTPException(status_code=403, detail="Game is not running")
 
-        # 2. Look up the flag
+        # Lock the flag row to serialise concurrent capture attempts of the same flag.
+        # Any concurrent request will block here until this transaction commits, then
+        # see captured_team_id is set and return "already captured".
         flag = session.query(Flag).filter(
             Flag.flag == flag_val,
             Flag.enabled == True
-        ).first()
+        ).with_for_update().first()
 
         if not flag or flag.team_id == attacker.id or flag.team.game_id != attacker.game_id:
             raise HTTPException(status_code=404, detail="Flag not valid")
@@ -44,17 +49,21 @@ async def capture_flag(request: Request):
         if flag.captured_team_id is not None:
             return {"status": "success", "message": "Flag already captured"}
 
-        # 4. Perform capture
+        # 4. Lock the victim team row before modifying their score.
+        victim = session.query(GameTeam).filter(
+            GameTeam.id == flag.team_id
+        ).with_for_update().first()
+
+        # 5. Perform capture
         flag.captured_team_id = attacker.id
 
         # Deduct from victim
-        victim = flag.team
         game = attacker.game
         if game.flag_stolen_rate > 0:
             stolen_amt = game.flag_stolen_rate
         else:
             stolen_amt = flag.value * game.flag_captured_multiplier
-            
+
         victim.score_flags -= stolen_amt
         session.add(ScoreAudit(
             team_id=victim.id,

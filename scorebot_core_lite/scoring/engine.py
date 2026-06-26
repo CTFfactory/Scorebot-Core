@@ -32,6 +32,15 @@ def score_round(session, game_id: int):
 
     logger.info(f"Starting scoring round for game {game.name} (ID: {game.id})")
 
+    # Lock all GameTeam rows for this game before any score modification.
+    # SQLAlchemy's identity map ensures game.teams will return these same
+    # already-locked objects, so no further locking is needed below.
+    # This serialises concurrent API score writes (beacon check-ins, flag
+    # captures, store purchases) against this scoring tick.
+    session.query(GameTeam).filter(
+        GameTeam.game_id == game_id
+    ).with_for_update().all()
+
     # 1. Score host/service uptimes
     for team in game.teams:
         for host in team.hosts:

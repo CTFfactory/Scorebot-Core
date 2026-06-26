@@ -185,7 +185,11 @@ async def checkin_beacon(request: Request):
         # Reopen database session for write/commits
         session = SessionLocal()
         bt = session.query(GameTeamBeaconToken).filter(GameTeamBeaconToken.token == beacon_token).first()
-        attacker_team = bt.team
+        # Lock the attacker team row to prevent lost-update races with concurrent
+        # score_round ticks or other beacon check-ins on the same team.
+        attacker_team = session.query(GameTeam).filter(
+            GameTeam.id == bt.team_id
+        ).with_for_update().first()
 
         if resolved_host_id:
             host = session.query(Host).filter(Host.id == resolved_host_id).first()
@@ -231,11 +235,12 @@ async def checkin_beacon(request: Request):
                     session.commit()
                 return {"status": "success", "message": "Beacon updated"}
 
-            # Create new compromise
+            # Create new compromise — flush (not commit) to get the auto-generated
+            # compromise.id without ending the transaction. The GameCompromiseHost
+            # child and score update are then committed atomically below.
             compromise = GameCompromise(token=beacon_token, attacker_team_id=attacker_team.id)
             session.add(compromise)
-            session.commit()
-            session.refresh(compromise)
+            session.flush()  # writes within transaction; sets compromise.id
 
             ch = GameCompromiseHost(
                 ip=address_raw,
@@ -255,11 +260,10 @@ async def checkin_beacon(request: Request):
             return {"status": "success", "message": "Beacon registered"}
 
         else:
-            # Faux host compromise
+            # Faux host compromise — flush to get compromise.id within the transaction.
             compromise = GameCompromise(token=beacon_token, attacker_team_id=attacker_team.id)
             session.add(compromise)
-            session.commit()
-            session.refresh(compromise)
+            session.flush()  # writes within transaction; sets compromise.id
 
             ch = GameCompromiseHost(
                 ip=address_raw,

@@ -33,7 +33,9 @@ async def make_purchase(request: Request):
         if not team_token or not isinstance(order_list, list):
             raise HTTPException(status_code=400, detail="Missing team or order array")
 
-        team = session.query(GameTeam).filter(GameTeam.token == team_token).first()
+        team = session.query(GameTeam).filter(
+            GameTeam.token == team_token
+        ).with_for_update().first()
         if not team or team.game.status != 1:
             raise HTTPException(status_code=404, detail="Active Team not found")
 
@@ -95,6 +97,15 @@ async def transfer_points(request: Request):
             dest_team = session.query(GameTeam).filter(GameTeam.token == dest_uuid).first()
             if not dest_team or dest_team.game.status != 1:
                 raise HTTPException(status_code=404, detail="Destination team not running")
+
+        # Lock both team rows in ascending PK order to prevent deadlocks when two
+        # concurrent transfers involve the same pair of teams in opposite directions.
+        teams_to_lock = sorted(
+            [t for t in [source_team, dest_team] if t],
+            key=lambda t: t.id
+        )
+        for t in teams_to_lock:
+            session.query(GameTeam).filter(GameTeam.id == t.id).with_for_update().first()
 
         if source_team:
             source_team.score_uptime -= amount
