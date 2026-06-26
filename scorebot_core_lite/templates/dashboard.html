@@ -1104,6 +1104,7 @@
         }
 
         async function uploadLogo(teamId, gameId) {
+            const btn = document.querySelector(`button[onclick*="uploadLogo(${teamId},"]`);
             const input = document.getElementById(`logo-input-${teamId}`);
             if (!input.files || input.files.length === 0) {
                 alert("Please select an image file first.");
@@ -1115,6 +1116,12 @@
             if (file.size > 2 * 1024 * 1024) {
                 alert("Error: File exceeds the 2 MB limit.\n\nRequired Specifications:\n- Square aspect ratio (1:1)\n- Min resolution: 300x300 pixels\n- Max size: 2 MB\n- Allowed formats: PNG, SVG, JPEG, GIF, WebP");
                 return;
+            }
+            
+            const originalText = btn ? btn.innerText : "Upload Logo";
+            if (btn) {
+                btn.innerText = "Uploading...";
+                btn.disabled = true;
             }
             
             const formData = new FormData();
@@ -1147,6 +1154,11 @@
                 }
             } catch (err) {
                 alert(`Error uploading file: ${err.message}`);
+            } finally {
+                if (btn) {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
             }
         }
 
