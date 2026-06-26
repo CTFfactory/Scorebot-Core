@@ -445,7 +445,19 @@ class ScoreHistory(Base):
     game = relationship("Game")
 
 
-engine = create_engine(config.DATABASE_URL, connect_args={"check_same_thread": False, "timeout": 30} if config.DATABASE_URL.startswith("sqlite") else {})
+if config.DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(
+        config.DATABASE_URL,
+        connect_args={"check_same_thread": False, "timeout": 30},
+    )
+else:
+    engine = create_engine(
+        config.DATABASE_URL,
+        pool_size=15,
+        max_overflow=25,
+        pool_pre_ping=True,
+        pool_timeout=30,
+    )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 from sqlalchemy import event
