@@ -169,7 +169,7 @@ async def checkin_beacon(request: Request):
                 if not dns_ip:
                     dns_ip = f"100.64.{target_team.id}.68"
 
-                hosts_to_resolve = [(h.id, h.fqdn) for h in target_team.hosts]
+                hosts_to_resolve = [(h.id, h.fqdn) for h in target_team.hosts if h.is_accessible]
 
         # Release database session while doing long/blocking network/DNS queries
         session.close()
@@ -202,6 +202,9 @@ async def checkin_beacon(request: Request):
                 Host.ip == address_raw,
                 GameTeam.game_id == attacker_team.game_id
             ).first()
+
+        if host and not host.is_accessible:
+            raise HTTPException(status_code=403, detail="Target host is not purchased yet")
 
         if not host:
             target_team = None
@@ -343,6 +346,8 @@ def get_beacon_ports():
         for g in running_games:
             for t in g.teams:
                 for h in t.hosts:
+                    if not h.is_accessible:
+                        continue
                     for s in h.services:
                         if s.application.lower() == "beacon":
                             ports.add(s.port)

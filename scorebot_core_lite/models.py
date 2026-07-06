@@ -151,7 +151,7 @@ class GameTeam(Base):
                 "open": open_tickets,
                 "closed": closed_tickets,
             },
-            "hosts": [h.get_json_scoreboard() for h in self.hosts],
+            "hosts": [h.get_json_scoreboard() for h in self.hosts if h.is_accessible],
             "logo": self.logo or "default.png",
             "beacons": self.get_beacons(),
             "minimal": self.minimal,
@@ -175,11 +175,26 @@ class Host(Base):
     scored = Column(DateTime, nullable=True)
     ip = Column(String(50), nullable=True)
     ping_last = Column(Integer, default=0)
+    purchasable = Column(Boolean, default=False)
     team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="CASCADE"), nullable=True)
 
     team = relationship("GameTeam", back_populates="hosts")
     services = relationship("Service", back_populates="host", cascade="all, delete-orphan")
     flags = relationship("Flag", back_populates="host", cascade="all, delete-orphan")
+
+    @property
+    def is_accessible(self):
+        """Returns True if the host is not purchasable, or if it is purchasable and has been purchased."""
+        if not self.purchasable:
+            return True
+        if not self.team:
+            return False
+        # Check if any purchase matches "VM Deployment: <name>"
+        expected_item = f"VM Deployment: {self.name}".lower()
+        for p in self.team.purchases:
+            if p.item.lower() == expected_item:
+                return True
+        return False
 
     def get_json_scoreboard(self):
         return {
@@ -483,6 +498,7 @@ def init_db():
     migrations = [
         "ALTER TABLE games ADD COLUMN zero_out_time DATETIME",
         "ALTER TABLE games ADD COLUMN beacon_time INTEGER DEFAULT 300",
+        "ALTER TABLE hosts ADD COLUMN purchasable BOOLEAN DEFAULT 0",
     ]
     for stmt in migrations:
         try:

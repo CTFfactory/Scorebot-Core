@@ -30,6 +30,8 @@ def request_job():
             hosts = list(team.hosts)
             random.shuffle(hosts)
             for host in hosts:
+                if not host.is_accessible:
+                    continue
                 # Check if host has active/unfinished jobs
                 active_job = session.query(Job).filter(Job.host_id == host.id, Job.finish == None).first()
                 if active_job:

@@ -181,6 +181,7 @@ def import_game(data: GameImportSchema):
                     ip=host_spec.ip,    # pre-populated from host_ips if pipeline supplied it, else ""
                     online=False,
                     team_id=team.id,
+                    purchasable=host_spec.purchasable,
                 )
                 session.add(host)
                 session.flush()  # get host.id

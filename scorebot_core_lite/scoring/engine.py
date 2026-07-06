@@ -44,6 +44,8 @@ def score_round(session, game_id: int):
     # 1. Score host/service uptimes
     for team in game.teams:
         for host in team.hosts:
+            if not host.is_accessible:
+                continue
             # Original scorebot: Host.get_score() returns 0 if not self.online.
             # Only score services if the host is marked online by the monitor.
             if not host.online:

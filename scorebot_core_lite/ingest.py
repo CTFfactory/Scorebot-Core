@@ -110,6 +110,7 @@ class HostSpec:
     services: List[ServiceSpec] = field(default_factory=list)
     scheduled_start: Optional[str] = None
     scheduled_stop: Optional[str] = None
+    purchasable: bool = False
 
 
 @dataclass
@@ -379,6 +380,8 @@ def _populate_hosts(
             logger.debug("VM %s color '%s' not in BLUE_COLORS, skipping", vm_instance, vm_color)
             continue
 
+        purchasable = bool(vm.get("purchasable", False))
+
         for team in target_teams:
             fqdn = f"{vm_instance}.{team.name}.{spec.event_name}.{dns_zone}"
             ip = host_ips.get(fqdn, "")   # pre-populate if pipeline provided it
@@ -389,6 +392,7 @@ def _populate_hosts(
                 services=services,
                 scheduled_start=scheduled_start,
                 scheduled_stop=scheduled_stop,
+                purchasable=purchasable,
             )
             team.hosts.append(host)
             scored_count += 1
