@@ -382,7 +382,9 @@ def _populate_hosts(
             logger.debug("VM %s color '%s' not in BLUE_COLORS, skipping", vm_instance, vm_color)
             continue
         for team in target_teams:
-            fqdn = f"{vm_instance}.{team.name}.{spec.event_name}.{dns_zone}"
+            is_windows = role_name.startswith("win") or role_name.startswith("zwin")
+            hostname_ad = f"{vm_instance}.ad" if is_windows else vm_instance
+            fqdn = f"{hostname_ad}.{team.name}.{spec.event_name}.{dns_zone}"
             ip = host_ips.get(fqdn, "")   # pre-populate if pipeline provided it
             host = HostSpec(
                 fqdn=fqdn,
