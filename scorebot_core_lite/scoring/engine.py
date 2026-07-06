@@ -52,25 +52,37 @@ def score_round(session, game_id: int):
                 host.scored = now
                 continue
 
-            host_score = 0
+            from collections import defaultdict
+            app_groups = defaultdict(list)
             for service in host.services:
-                # Service status 0 is UP/Green, status 4 is Yellow/Warning
-                is_active = (service.status == 0)
-                is_yellow = (service.status == 4)
-                if service.bonus and not service.bonus_started:
-                    is_active = False
-                    is_yellow = False
+                if service.application.lower() == "beacon":
+                    continue
+                app_groups[service.application.lower()].append(service)
 
-                if is_active:
-                    if service.content:
-                        # Content status is fraction of 100
-                        fraction = max(0, min(100, service.content.status))
-                        host_score += math.floor(service.value * (fraction / 100.0))
-                    else:
-                        host_score += service.value
-                elif is_yellow:
-                    # Partial scoring: award 50% points for yellow status
-                    host_score += math.floor(service.value * 0.5)
+            host_score = 0
+            for app_name, services in app_groups.items():
+                group_max_score = 0
+                for service in services:
+                    is_active = (service.status == 0)
+                    is_yellow = (service.status == 4)
+                    if service.bonus and not service.bonus_started:
+                        is_active = False
+                        is_yellow = False
+
+                    svc_score = 0
+                    if is_active:
+                        if service.content:
+                            fraction = max(0, min(100, service.content.status))
+                            svc_score = math.floor(service.value * (fraction / 100.0))
+                        else:
+                            svc_score = service.value
+                    elif is_yellow:
+                        svc_score = math.floor(service.value * 0.5)
+
+                    if svc_score > group_max_score:
+                        group_max_score = svc_score
+
+                host_score += group_max_score
 
             if host_score > 0:
                 team.score_uptime += host_score
