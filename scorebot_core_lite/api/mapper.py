@@ -11,6 +11,10 @@ def get_uuid_mapping(game_id: int):
     try:
         game = session.query(Game).filter(Game.id == game_id).first()
         if not game:
+            # Fall back to the active running game if the requested ID does not exist.
+            # This handles cases where external components are configured with a hardcoded game ID.
+            game = session.query(Game).filter(Game.status == 1).first()
+        if not game:
             raise HTTPException(status_code=404, detail="Game not found")
         if game.status != 1:
             raise HTTPException(status_code=403, detail="Game is not running")
