@@ -148,16 +148,17 @@ async def checkin_beacon(request: Request):
                     continue
 
             if target_team:
+                dns_octet = config.BEACON_DNS_OCTET
                 if target_team.subnet:
                     parts = target_team.subnet.split('.')
                     if len(parts) >= 3:
-                        dns_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.68"
+                        dns_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.{dns_octet}"
                 if not dns_ip and target_team.game:
                     for t in target_team.game.teams:
                         if t.subnet:
                             parts = t.subnet.split('.')
                             if len(parts) >= 3:
-                                dns_ip = f"{parts[0]}.{parts[1]}.{target_team.id}.68"
+                                dns_ip = f"{parts[0]}.{parts[1]}.{target_team.id}.{dns_octet}"
                                 break
                 if not dns_ip:
                     import os
@@ -165,9 +166,9 @@ async def checkin_beacon(request: Request):
                     if beacon_ip:
                         parts = beacon_ip.split('.')
                         if len(parts) >= 3:
-                            dns_ip = f"{parts[0]}.{parts[1]}.{target_team.id}.68"
+                            dns_ip = f"{parts[0]}.{parts[1]}.{target_team.id}.{dns_octet}"
                 if not dns_ip:
-                    dns_ip = f"100.64.{target_team.id}.68"
+                    dns_ip = f"100.64.{target_team.id}.{dns_octet}"
 
                 hosts_to_resolve = [(h.id, h.fqdn) for h in target_team.hosts if h.is_accessible]
 

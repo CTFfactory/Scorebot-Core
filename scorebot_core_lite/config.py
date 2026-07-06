@@ -61,6 +61,7 @@ CLEANUP_INTERVAL = int(os.getenv("CLEANUP_INTERVAL", "120"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")
 BEACON_IP = os.getenv("BEACON_IP")
+BEACON_DNS_OCTET = os.getenv("BEACON_DNS_OCTET", "68")
 
 # Path to the game-definitions directory on disk (mounted volume or git checkout).
 # The ingest module reads event/ and role/ subdirectories from this path.
