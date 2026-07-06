@@ -15,7 +15,6 @@ class SchedulerDaemon(threading.Thread):
     def __init__(self):
         super().__init__(daemon=True, name="ScorebotScheduler")
         self.running = False
-        self.last_scoring = 0.0
         self.last_cleanup = 0.0
         logger.info("Scorebot Background Scheduler initialized.")
 
@@ -39,12 +38,19 @@ class SchedulerDaemon(threading.Thread):
                         game.zero_out_time = None
                 session.commit()
 
-                # 1. Check scoring interval
-                if now - self.last_scoring >= config.SCORING_INTERVAL:
-                    running_games = session.query(Game).filter(Game.status == 1).all()
-                    for game in running_games:
+                # 1. Score each running game according to its own round_time field.
+                # This matches the original scorebot where Game.round_score() checks:
+                #   (score_time - self.scored).seconds > game.get_option("round_time")
+                running_games = session.query(Game).filter(Game.status == 1).all()
+                for game in running_games:
+                    interval = game.round_time if game.round_time else config.SCORING_INTERVAL
+                    last_scored = game.scored  # DateTime or None
+                    if last_scored is None:
+                        elapsed = interval + 1  # never scored — score immediately
+                    else:
+                        elapsed = (datetime.now(timezone.utc).replace(tzinfo=None) - last_scored).total_seconds()
+                    if elapsed >= interval:
                         score_round(session, game.id)
-                    self.last_scoring = now
 
                 # 2. Check cleanup interval
                 if now - self.last_cleanup >= config.CLEANUP_INTERVAL:

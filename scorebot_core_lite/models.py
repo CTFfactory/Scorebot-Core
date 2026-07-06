@@ -19,7 +19,7 @@ import json
 import uuid
 import datetime
 from sqlalchemy import (
-    create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float
+    create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, text
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from scorebot_core_lite import config
@@ -51,6 +51,7 @@ class Game(Base):
     ticket_reopen_multiplier = Column(Integer, default=200)
     score_exchange_rate = Column(Integer, default=100)  # exchange rate * 100
     host_ping_ratio = Column(Integer, default=50)
+    beacon_time = Column(Integer, default=300)  # Beacon expiry timeout (seconds); original Options.beacon_time default = 300
     zero_out_time = Column(DateTime, nullable=True)
 
     teams = relationship("GameTeam", back_populates="game", cascade="all, delete-orphan")
@@ -478,12 +479,17 @@ def do_begin(conn):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    try:
-        from sqlalchemy import text
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE games ADD COLUMN zero_out_time DATETIME"))
-    except Exception:
-        pass
+    # Best-effort schema migrations for columns added after initial deployment
+    migrations = [
+        "ALTER TABLE games ADD COLUMN zero_out_time DATETIME",
+        "ALTER TABLE games ADD COLUMN beacon_time INTEGER DEFAULT 300",
+    ]
+    for stmt in migrations:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception:
+            pass  # Column already exists or DB doesn't support ALTER TABLE
 
 
 import logging

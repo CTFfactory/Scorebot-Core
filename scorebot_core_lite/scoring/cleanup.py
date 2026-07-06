@@ -28,23 +28,19 @@ def run_cleanup(session):
             session.delete(job)
 
     # 3. Expire inactive beacons (beacons where checkin/start timeout has passed)
+    # Original scorebot: GameCompromise.is_expired() uses game.get_option("beacon_time") (default 300s).
     active_compromises = session.query(GameCompromise).filter(GameCompromise.finish == None).all()
     for compromise in active_compromises:
-        # Find the game options through the attacker's game
         game = session.query(Game).filter(Game.id == compromise.attacker.game_id).first()
-        beacon_time = game.beacon_value if game else 300  # Default or option
-        # In Django models.py, it checked beacon_time option (which is beacon_time preset option, default 300)
-        # Let's check: game.beacon_value or similar (preset option ticket_grace_period etc.)
-        # We can look at what model fields we have on Game: beacon_value, beacon_time is default 300
-        # Let's use 300 seconds default, or we can add a Column beacon_time to Game. Let's look:
-        # Yes, standard beacon timeout is 300 seconds.
-        # Let's find checkin time on associated hosts
+        # Use per-game beacon_time if available, otherwise fall back to 300s default.
+        beacon_timeout = getattr(game, "beacon_time", 300) if game else 300
+
         last_checkin = compromise.start
         for ch in compromise.hosts:
             if ch.checkin and ch.checkin > last_checkin:
                 last_checkin = ch.checkin
 
-        if (now - last_checkin).total_seconds() > 300:
+        if (now - last_checkin).total_seconds() > beacon_timeout:
             logger.info(f"Closing expired compromise/beacon {compromise.id}")
             compromise.finish = now
 

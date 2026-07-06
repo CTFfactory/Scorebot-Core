@@ -235,6 +235,15 @@ async def checkin_beacon(request: Request):
                     session.commit()
                 return {"status": "success", "message": "Beacon updated"}
 
+            # Check if ANY other active beacon (from any attacker) is already on this host.
+            # Original scorebot: host.beacons.filter(beacon__finish__isnull=True).count() > 1 → 403.
+            any_active = session.query(GameCompromise).join(GameCompromiseHost).filter(
+                GameCompromise.finish == None,
+                GameCompromiseHost.host_id == host.id
+            ).first()
+            if any_active:
+                raise HTTPException(status_code=403, detail="Already a Beacon on that Host!")
+
             # Create new compromise — flush (not commit) to get the auto-generated
             # compromise.id without ending the transaction. The GameCompromiseHost
             # child and score update are then committed atomically below.
@@ -260,7 +269,17 @@ async def checkin_beacon(request: Request):
             return {"status": "success", "message": "Beacon registered"}
 
         else:
-            # Faux host compromise — flush to get compromise.id within the transaction.
+            # Faux host compromise — check for any existing active beacon on this IP first.
+            # Original scorebot: GameCompromiseHost.objects.filter(ip=address_raw, beacon__finish__isnull=True).count() > 0 → 403.
+            existing_faux = session.query(GameCompromise).join(GameCompromiseHost).filter(
+                GameCompromise.finish == None,
+                GameCompromiseHost.ip == address_raw,
+                GameCompromiseHost.host_id == None
+            ).first()
+            if existing_faux:
+                raise HTTPException(status_code=403, detail="Already a Beacon on that Host!")
+
+            # Flush to get compromise.id within the transaction.
             compromise = GameCompromise(token=beacon_token, attacker_team_id=attacker_team.id)
             session.add(compromise)
             session.flush()  # writes within transaction; sets compromise.id

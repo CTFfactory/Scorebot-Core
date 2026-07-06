@@ -97,9 +97,16 @@ class ServiceSpec:
 
 @dataclass
 class HostSpec:
-    """A scored host stub. IP is registered later by the host via POST /api/hosts."""
+    """A scored host stub.
+
+    ip may be pre-populated when the pipeline knows the address at import
+    time (e.g. from Proxmox guest-agent or Terraform outputs). When empty
+    the host's ip column will be updated later via POST /api/hosts once the
+    VM has booted and its guest-agent is reachable.
+    """
     fqdn: str
     role: str
+    ip: str = ""                    # optional: filled in at import or later by /api/hosts
     services: List[ServiceSpec] = field(default_factory=list)
     scheduled_start: Optional[str] = None
     scheduled_stop: Optional[str] = None
@@ -155,6 +162,7 @@ def load_from_db(
     event_name: str,
     environment: str,
     subnets: Optional[Dict[str, str]] = None,
+    host_ips: Optional[Dict[str, str]] = None,
 ) -> GameImportSpec:
     """Build a GameImportSpec from a compiled game-definitions DB dict.
 
@@ -167,12 +175,15 @@ def load_from_db(
         event_name:  Event to import (e.g. "test", "bsde").
         environment: Environment name (e.g. "prod", "dev").
         subnets:     Optional per-team subnet CIDRs {"notsure": "10.x.x.0/24"}.
+        host_ips:    Optional per-host IP addresses {"fqdn": "10.x.x.y"} populated
+                     by the pipeline from Proxmox guest-agent or Terraform outputs.
 
     Raises:
         KeyError:   If the event is not found in the DB.
         ValueError: If required fields are missing.
     """
     subnets = subnets or {}
+    host_ips = host_ips or {}
 
     event = _find_in_db(db, "event", "name", event_name)
     if event is None:
@@ -204,7 +215,7 @@ def load_from_db(
             members=tdef.get("members", []),
         )
 
-    _populate_hosts(spec, event, team_map, dns_zone, lambda role_name: _find_in_db(db, "role", "name", role_name))
+    _populate_hosts(spec, event, team_map, dns_zone, lambda role_name: _find_in_db(db, "role", "name", role_name), host_ips=host_ips)
 
     spec.teams = list(team_map.values())
     return spec
@@ -228,6 +239,7 @@ def load_from_disk(
     event_name: str,
     environment: str,
     subnets: Optional[Dict[str, str]] = None,
+    host_ips: Optional[Dict[str, str]] = None,
     base_path: Optional[str] = None,
 ) -> GameImportSpec:
     """Build a GameImportSpec from game-definitions files on disk.
@@ -240,10 +252,12 @@ def load_from_disk(
         event_name:  Name of the event (e.g. "test").
         environment: Environment name (e.g. "prod").
         subnets:     Optional per-team subnet CIDRs.
+        host_ips:    Optional per-host IP addresses {"fqdn": "10.x.x.y"}.
         base_path:   Override GAME_DEFINITIONS_PATH (useful for unit tests).
     """
     base = base_path or config.GAME_DEFINITIONS_PATH
     subnets = subnets or {}
+    host_ips = host_ips or {}
 
     event_path = os.path.join(base, "event", f"{event_name}.json")
     event = _load_json_file(event_path)["event"]
@@ -287,7 +301,7 @@ def load_from_disk(
             return None
         return _load_json_file(role_path).get("role")
 
-    _populate_hosts(spec, event, team_map, dns_zone, _role_loader)
+    _populate_hosts(spec, event, team_map, dns_zone, _role_loader, host_ips=host_ips)
 
     spec.teams = list(team_map.values())
     return spec
@@ -303,6 +317,7 @@ def _populate_hosts(
     team_map: Dict[str, TeamSpec],
     dns_zone: str,
     role_loader,
+    host_ips: Optional[Dict[str, str]] = None,
 ) -> None:
     """Walk virtual_machines in an event and create scored HostSpec entries.
 
@@ -315,7 +330,11 @@ def _populate_hosts(
         team_map:    Dict of team_name -> TeamSpec (already created).
         dns_zone:    DNS zone string used to build FQDNs.
         role_loader: Callable(role_name) -> role dict or None.
+        host_ips:    Optional {fqdn: ip} map supplied by the pipeline at import
+                     time. When a host's FQDN is in this map its ip field will
+                     be pre-populated rather than left blank.
     """
+    host_ips = host_ips or {}
     scored_count = 0
     for vm in event.get("virtual_machines", []):
         vm_instance = vm.get("vm_instance", "")
@@ -362,16 +381,18 @@ def _populate_hosts(
 
         for team in target_teams:
             fqdn = f"{vm_instance}.{team.name}.{spec.event_name}.{dns_zone}"
+            ip = host_ips.get(fqdn, "")   # pre-populate if pipeline provided it
             host = HostSpec(
                 fqdn=fqdn,
                 role=role_name,
+                ip=ip,
                 services=services,
                 scheduled_start=scheduled_start,
                 scheduled_stop=scheduled_stop,
             )
             team.hosts.append(host)
             scored_count += 1
-            logger.debug("  Scored host: %s [%d services]", fqdn, len(services))
+            logger.debug("  Scored host: %s ip=%s [%d services]", fqdn, ip or "(TBD)", len(services))
 
     logger.info(
         "Event '%s': %d teams, %d scored host stubs created",

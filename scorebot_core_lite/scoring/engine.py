@@ -44,6 +44,12 @@ def score_round(session, game_id: int):
     # 1. Score host/service uptimes
     for team in game.teams:
         for host in team.hosts:
+            # Original scorebot: Host.get_score() returns 0 if not self.online.
+            # Only score services if the host is marked online by the monitor.
+            if not host.online:
+                host.scored = now
+                continue
+
             host_score = 0
             for service in host.services:
                 # Service status 0 is UP/Green
@@ -71,7 +77,10 @@ def score_round(session, game_id: int):
             host.scored = now
 
     # 2. Score active beacons
-    # Beacons deduct score_beacons from victim (compromised host's team)
+    # Per-round beacon scoring matches the original scorebot (GameCompromise.round_score):
+    #   - Victim team loses beacon_value points every round while the beacon is active.
+    #   - Attacker team does NOT gain per-round points; the attacker already received a
+    #     one-time bonus (beacon_value) when the beacon was first registered in the API.
     active_compromises = session.query(GameCompromise).join(GameTeam, GameCompromise.attacker_team_id == GameTeam.id).filter(
         GameTeam.game_id == game.id,
         GameCompromise.finish == None
@@ -80,7 +89,7 @@ def score_round(session, game_id: int):
     for compromise in active_compromises:
         # Find the compromise host information
         for ch in compromise.hosts:
-            # Deduct points from compromised host's team
+            # Deduct points from compromised host's team only
             victim_team = ch.team
             if victim_team:
                 victim_team.score_beacons -= game.beacon_value
@@ -90,15 +99,7 @@ def score_round(session, game_id: int):
                     amount=-game.beacon_value,
                     description=f"Compromised by {compromise.attacker.name} on {ch.ip}"
                 ))
-                # Award points to the attacker team
-                compromise.attacker.score_beacons += game.beacon_value
-                session.add(ScoreAudit(
-                    team_id=compromise.attacker.id,
-                    source="BEACON-ATTACKER",
-                    amount=game.beacon_value,
-                    description=f"Compromised {victim_team.name} on {ch.ip}"
-                ))
-                logger.debug(f"Attacker Team {compromise.attacker.name} scored +{game.beacon_value} and Victim Team {victim_team.name} deducted {game.beacon_value} points due to active beacon on host {ch.ip}")
+                logger.debug(f"Victim Team {victim_team.name} deducted {game.beacon_value} points due to active beacon on host {ch.ip} (attacker: {compromise.attacker.name})")
 
     # 3. Score open tickets
     for team in game.teams:

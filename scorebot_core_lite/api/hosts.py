@@ -35,7 +35,12 @@ async def register_host(request: Request):
             session.commit()
             session.refresh(host)
         else:
-            host.ip = ip
+            # Only set the IP when it is currently blank — once an IP is set
+            # (at game creation or by an admin via PUT /api/admin/games/hosts/{id})
+            # this endpoint must not overwrite it.  Beacon DNS-resolution updates
+            # host.ip directly in the database and are unaffected by this guard.
+            if not host.ip:
+                host.ip = ip
             host.name = host_short_name
             host.team_id = team.id
 

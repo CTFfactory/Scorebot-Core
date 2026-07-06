@@ -56,6 +56,7 @@ class GameImportSchema(BaseModel):
     event: str
     environment: str
     subnets: Optional[Dict[str, str]] = None       # {"team_name": "10.x.x.0/24"}
+    host_ips: Optional[Dict[str, str]] = None      # {"fqdn": "10.x.x.y"} — pre-populate IPs at import time
     game_definitions_db: Optional[Dict] = None     # Full compiled DB from VAR_GAME_DEFINITIONS_DB
     mode: int = 0
 
@@ -100,6 +101,7 @@ def import_game(data: GameImportSchema):
                 event_name=data.event,
                 environment=data.environment,
                 subnets=data.subnets,
+                host_ips=data.host_ips,
             )
         else:
             logger.info(
@@ -110,6 +112,7 @@ def import_game(data: GameImportSchema):
                 event_name=data.event,
                 environment=data.environment,
                 subnets=data.subnets,
+                host_ips=data.host_ips,
             )
     except (FileNotFoundError, KeyError) as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -175,7 +178,7 @@ def import_game(data: GameImportSchema):
                 host = Host(
                     fqdn=host_spec.fqdn,
                     name=host_spec.fqdn.split(".")[0],  # short hostname portion
-                    ip="",          # filled in by /api/hosts when host boots
+                    ip=host_spec.ip,    # pre-populated from host_ips if pipeline supplied it, else ""
                     online=False,
                     team_id=team.id,
                 )
