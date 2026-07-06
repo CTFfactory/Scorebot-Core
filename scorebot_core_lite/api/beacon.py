@@ -3,7 +3,7 @@ import uuid
 import socket
 from fastapi import APIRouter, HTTPException, Depends, Request
 from scorebot_core_lite.models import (
-    SessionLocal, GameTeam, GameTeamBeaconToken, Host, GameCompromise, GameCompromiseHost, Game, Service
+    SessionLocal, GameTeam, GameTeamBeaconToken, Host, GameCompromise, GameCompromiseHost, Game, Service, GamePort
 )
 from scorebot_core_lite.auth import verify_cli_token
 from scorebot_core_lite.scoring.notifications import send_notification
@@ -339,17 +339,8 @@ def get_beacon_ports():
     """Retrieve list of open beacon ports in running games."""
     session = SessionLocal()
     try:
-        running_games = session.query(Game).filter(Game.status == 1).all()
-        # Collect all services of type 'beacon' or similar
-        # Since simplified, let's query all service ports configured on hosts in running games
-        ports = set()
-        for g in running_games:
-            for t in g.teams:
-                for h in t.hosts:
-                    for s in h.services:
-                        if s.application.lower() == "beacon":
-                            ports.add(s.port)
-        return {"ports": list(ports)}
+        ports = session.query(GamePort).join(Game).filter(Game.status == 1).all()
+        return {"ports": list({p.port for p in ports})}
     finally:
         session.close()
 
@@ -375,25 +366,17 @@ async def register_beacon_port(request: Request):
         if not team.offensive:
             raise HTTPException(status_code=403, detail="Team is not designated as offensive")
 
-        # Verify or register service port on hosts (or mock it by adding service)
-        host = session.query(Host).join(GameTeam).filter(GameTeam.game_id == team.game_id).first()
-        if not host:
-            raise HTTPException(status_code=400, detail="No hosts found in the game to register the service port")
-
-        existing_service = session.query(Service).filter(
-            Service.port == port_num,
-            Service.application == "beacon"
+        existing_port = session.query(GamePort).filter(
+            GamePort.port == port_num,
+            GamePort.game_id == team.game_id
         ).first()
 
-        if not existing_service:
-            new_service = Service(
+        if not existing_port:
+            new_port = GamePort(
                 port=port_num,
-                name=f"beacon_{port_num}",
-                application="beacon",
-                host_id=host.id,
-                value=0
+                game_id=team.game_id
             )
-            session.add(new_service)
+            session.add(new_port)
             session.commit()
 
         return {

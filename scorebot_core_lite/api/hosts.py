@@ -46,8 +46,8 @@ async def register_host(request: Request):
 
         # Register services
         services_list = body.get("services", [])
-        # Remove old services except beacon to prevent duplicates
-        session.query(Service).filter(Service.host_id == host.id, Service.application != "beacon").delete()
+        # Remove old services to prevent duplicates
+        session.query(Service).filter(Service.host_id == host.id).delete()
 
         for svc in services_list:
             port = int(svc.get("port", 80))

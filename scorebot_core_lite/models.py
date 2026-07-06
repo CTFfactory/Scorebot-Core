@@ -56,6 +56,7 @@ class Game(Base):
 
     teams = relationship("GameTeam", back_populates="game", cascade="all, delete-orphan")
     events = relationship("GameEvent", back_populates="game", cascade="all, delete-orphan")
+    ports = relationship("GamePort", back_populates="game", cascade="all, delete-orphan")
 
     def get_list_json(self):
         d = {"id": self.id, "mode": self.mode, "name": self.name, "status": self.status}
@@ -418,6 +419,16 @@ class GameTeamBeaconToken(Base):
     token = Column(String(36), unique=True, default=lambda: str(uuid.uuid4()))
 
     team = relationship("GameTeam", back_populates="beacon_tokens")
+
+
+class GamePort(Base):
+    __tablename__ = "game_ports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    port = Column(Integer, nullable=False)
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), nullable=False)
+
+    game = relationship("Game", back_populates="ports")
 
 
 class ScoreAdjustment(Base):
