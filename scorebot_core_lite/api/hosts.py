@@ -106,3 +106,62 @@ def deregister_host_by_fqdn(fqdn: str):
     finally:
         session.close()
 
+@router.post("/api/services/{service_id}/credentials")
+async def update_service_credentials(service_id: int, request: Request):
+    """Allows a team to update the credentials for one of their services."""
+    import json
+    from scorebot_core_lite.models import Content
+    session = SessionLocal()
+    try:
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON")
+
+        token = body.get("token")
+        username = body.get("username")
+        password = body.get("password")
+
+        if not token or not username or not password:
+            raise HTTPException(status_code=400, detail="Missing token, username, or password")
+
+        # Find team
+        team = session.query(GameTeam).filter(GameTeam.token == token).first()
+        if not team:
+            raise HTTPException(status_code=403, detail="Invalid team token")
+
+        # Find service
+        service = session.query(Service).filter(Service.id == service_id).first()
+        if not service:
+            raise HTTPException(status_code=404, detail="Service not found")
+
+        # Verify host ownership
+        if not service.host or service.host.team_id != team.id:
+            raise HTTPException(status_code=403, detail="You do not own this service")
+
+        # Update or create Content
+        if not service.content:
+            content = Content(
+                service_id=service.id,
+                type=service.application,
+                data=json.dumps({"auth": {"username": username, "password": password}})
+            )
+            session.add(content)
+        else:
+            try:
+                content_data = json.loads(service.content.data)
+            except Exception:
+                content_data = {}
+            if not isinstance(content_data, dict):
+                content_data = {}
+            if "auth" not in content_data:
+                content_data["auth"] = {}
+            content_data["auth"]["username"] = username
+            content_data["auth"]["password"] = password
+            service.content.data = json.dumps(content_data)
+
+        session.commit()
+        return {"status": "success", "message": "Credentials updated"}
+    finally:
+        session.close()
+
