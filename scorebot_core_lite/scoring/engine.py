@@ -54,10 +54,12 @@ def score_round(session, game_id: int):
 
             host_score = 0
             for service in host.services:
-                # Service status 0 is UP/Green
+                # Service status 0 is UP/Green, status 4 is Yellow/Warning
                 is_active = (service.status == 0)
+                is_yellow = (service.status == 4)
                 if service.bonus and not service.bonus_started:
                     is_active = False
+                    is_yellow = False
 
                 if is_active:
                     if service.content:
@@ -66,6 +68,9 @@ def score_round(session, game_id: int):
                         host_score += math.floor(service.value * (fraction / 100.0))
                     else:
                         host_score += service.value
+                elif is_yellow:
+                    # Partial scoring: award 50% points for yellow status
+                    host_score += math.floor(service.value * 0.5)
 
             if host_score > 0:
                 team.score_uptime += host_score
