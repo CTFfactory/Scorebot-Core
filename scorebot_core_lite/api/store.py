@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
-from scorebot_core_lite.models import SessionLocal, GameTeam, Purchase, ScoreAudit
-from scorebot_core_lite.auth import verify_store_token
+from scorebot_core_lite.models import SessionLocal, GameTeam, Purchase, ScoreAudit, Game, StorePriceOverride
+from scorebot_core_lite.auth import verify_store_token, verify_grey_token
 
 router = APIRouter()
 
@@ -130,3 +130,69 @@ async def transfer_points(request: Request):
         return {"status": "success", "message": "Transfer processed"}
     finally:
         session.close()
+
+@router.get("/api/store/prices", dependencies=[Depends(verify_store_token)])
+def get_store_prices():
+    """Retrieve active store price overrides."""
+    session = SessionLocal()
+    try:
+        # Find active game
+        game = session.query(Game).filter(Game.status == 1).first()
+        if not game:
+            game = session.query(Game).first()
+        if not game:
+            return {}
+        
+        overrides = session.query(StorePriceOverride).filter(StorePriceOverride.game_id == game.id).all()
+        return {ov.item_id: ov.price for ov in overrides}
+    finally:
+        session.close()
+
+@router.patch("/api/admin/store/prices", dependencies=[Depends(verify_grey_token)])
+async def update_store_prices(request: Request):
+    """Update active store price overrides."""
+    session = SessionLocal()
+    try:
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON")
+        
+        prices = body.get("prices")
+        if not isinstance(prices, dict):
+            raise HTTPException(status_code=400, detail="Expected 'prices' dict")
+            
+        # Find active game
+        game = session.query(Game).filter(Game.status == 1).first()
+        if not game:
+            game = session.query(Game).first()
+        if not game:
+            raise HTTPException(status_code=404, detail="No active game found")
+            
+        for item_id, price in prices.items():
+            if price is None:
+                session.query(StorePriceOverride).filter(
+                    StorePriceOverride.game_id == game.id,
+                    StorePriceOverride.item_id == item_id
+                ).delete()
+            else:
+                try:
+                    price_val = float(price)
+                except ValueError:
+                    raise HTTPException(status_code=400, detail=f"Invalid price value for {item_id}")
+                
+                override = session.query(StorePriceOverride).filter(
+                    StorePriceOverride.game_id == game.id,
+                    StorePriceOverride.item_id == item_id
+                ).first()
+                if override:
+                    override.price = price_val
+                else:
+                    override = StorePriceOverride(game_id=game.id, item_id=item_id, price=price_val)
+                    session.add(override)
+                    
+        session.commit()
+        return {"status": "success", "message": "Prices updated"}
+    finally:
+        session.close()
+

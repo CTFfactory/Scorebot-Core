@@ -19,7 +19,7 @@ import json
 import uuid
 import datetime
 from sqlalchemy import (
-    create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, text
+    create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, text, UniqueConstraint
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from scorebot_core_lite import config
@@ -470,6 +470,18 @@ class ScoreHistory(Base):
 
     team = relationship("GameTeam")
     game = relationship("Game")
+
+class StorePriceOverride(Base):
+    __tablename__ = "store_price_overrides"
+
+    id = Column(Integer, primary_key=True, index=True)
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), nullable=False)
+    item_id = Column(String(150), nullable=False)
+    price = Column(Float, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("game_id", "item_id", name="uq_game_item_price"),
+    )
 
 
 if config.DATABASE_URL.startswith("sqlite"):

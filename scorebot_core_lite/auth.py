@@ -113,3 +113,19 @@ async def verify_ticket_token(request: Request):
         )
         raise HTTPException(status_code=403, detail="Forbidden: Ticket privilege required")
     return x_scorebot_token
+
+async def verify_grey_token(request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    x_scorebot_token = _get_token(request)
+    if not x_scorebot_token:
+        logger.warning("Grey auth failed from %s: X-Scorebot-Token / SBE-AUTH header is missing", client_ip)
+        raise HTTPException(status_code=403, detail="Forbidden: Grey privilege required")
+    if x_scorebot_token not in (config.API_TOKEN_GREY, config.API_TOKEN_ADMIN):
+        logger.warning(
+            "Grey auth failed from %s: X-Scorebot-Token mismatch (received length %d)",
+            client_ip,
+            len(x_scorebot_token)
+        )
+        raise HTTPException(status_code=403, detail="Forbidden: Grey privilege required")
+    return x_scorebot_token
+
