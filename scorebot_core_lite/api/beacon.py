@@ -346,8 +346,6 @@ def get_beacon_ports():
         for g in running_games:
             for t in g.teams:
                 for h in t.hosts:
-                    if not h.is_accessible:
-                        continue
                     for s in h.services:
                         if s.application.lower() == "beacon":
                             ports.add(s.port)

@@ -359,7 +359,7 @@
                 <p style="margin: 0; color: #9ca3af;">Administration Dashboard</p>
             </div>
             <div style="display: flex; align-items: center; gap: 1rem;">
-                <span style="color: #9ca3af; font-size: 0.85rem;">Grey Team Token: <code style="background: rgba(255,255,255,0.05); padding: 0.25rem 0.5rem; border-radius: 4px; color: #60a5fa; cursor: pointer;" onclick="navigator.clipboard.writeText('{{ grey_token }}'); alert('Grey Team Token copied!');">{{ grey_token }}</code></span>
+                <span style="color: #9ca3af; font-size: 0.85rem;">Grey Team Token: <code style="background: rgba(255,255,255,0.05); padding: 0.25rem 0.5rem; border-radius: 4px; color: #60a5fa; cursor: pointer;" onclick="copyToClipboard('{{ grey_token }}', 'Grey Team Token copied!');">{{ grey_token }}</code></span>
                 <span class="badge badge-running">Active</span>
                 <button class="btn btn-sm btn-danger" onclick="logout()">Logout</button>
             </div>
@@ -446,6 +446,41 @@
     </div>
 
     <script>
+        function copyToClipboard(text, message = 'Copied to clipboard!') {
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert(message);
+                }).catch(err => {
+                    console.error('Failed to copy: ', err);
+                    fallbackCopy(text, message);
+                });
+            } else {
+                fallbackCopy(text, message);
+            }
+        }
+
+        function fallbackCopy(text, message) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-999999px";
+            textArea.style.top = "-999999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    alert(message);
+                } else {
+                    alert('Copy failed');
+                }
+            } catch (err) {
+                alert('Fallback copy failed: ' + err);
+            }
+            document.body.removeChild(textArea);
+        }
+
         document.getElementById('createGameForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('gameName').value;
@@ -624,7 +659,7 @@
                         <details class="collapsible-section team-card" style="margin-bottom: 1rem;">
                             <summary style="background: rgba(0,0,0,0.15);">
                                 <span style="display: flex; align-items: center; gap: 0.75rem;">
-                                    <strong style="color: ${colorHex}; font-size: 1.1rem;">${team.name}</strong>
+                                    <strong style="color: ${colorHex}; font-size: 1.1rem;">${team.name} <span style="font-size: 0.8rem; color: #9ca3af; font-weight: normal;">(ID: ${team.id})</span></strong>
                                     <span class="badge" style="background-color: rgba(255, 255, 255, 0.05); color: #9ca3af; text-transform: none;">
                                         Score: ${team.score || 0}
                                     </span>
@@ -632,9 +667,13 @@
                             </summary>
                             <div class="collapsible-content">
                                 <div style="font-size: 0.8rem; color: #9ca3af; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; background: rgba(0,0,0,0.25); padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
-                                    <div><strong>Token:</strong> <code style="color: #60a5fa;">${team.token}</code></div>
+                                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                                        <div><strong>ID:</strong> <code style="color: #60a5fa; cursor: pointer;" onclick="copyToClipboard('${team.id}', 'Team ID copied!')">${team.id}</code></div>
+                                        <div><strong>Token:</strong> <code style="color: #60a5fa; cursor: pointer;" onclick="copyToClipboard('${team.token}', 'Token copied!')">${team.token}</code></div>
+                                    </div>
                                     <div style="display: flex; gap: 0.25rem;">
-                                        <button type="button" class="btn btn-sm btn-info" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;" onclick="navigator.clipboard.writeText('${team.token}'); alert('Token copied!');">Copy</button>
+                                        <button type="button" class="btn btn-sm btn-info" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;" onclick="copyToClipboard('${team.id}', 'Team ID copied!')">Copy ID</button>
+                                        <button type="button" class="btn btn-sm btn-info" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;" onclick="copyToClipboard('${team.token}', 'Token copied!')">Copy Token</button>
                                         <button type="button" class="btn btn-sm btn-danger" style="padding: 0.15rem 0.4rem; font-size: 0.75rem;" onclick="deleteTeam(${team.id}, ${gameId})">Delete Team</button>
                                     </div>
                                 </div>
