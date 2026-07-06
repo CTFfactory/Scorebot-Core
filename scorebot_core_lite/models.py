@@ -265,6 +265,8 @@ class Service(Base):
             "protocol": proto_char,
             "port": self.port,
             "bonus": self.bonus,
+            "name": self.name,
+            "application": self.application,
         }
 
     def get_json_job(self):
