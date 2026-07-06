@@ -99,7 +99,7 @@ class GameTeam(Base):
     game = relationship("Game", back_populates="teams")
     hosts = relationship("Host", back_populates="team", cascade="all, delete-orphan")
     flags = relationship("Flag", foreign_keys="[Flag.team_id]", back_populates="team", cascade="all, delete-orphan")
-    compromises = relationship("GameCompromise", back_populates="attacker")
+    compromises = relationship("GameCompromise", back_populates="attacker", cascade="all, delete-orphan")
     tickets = relationship("GameTicket", back_populates="team", cascade="all, delete-orphan")
     purchases = relationship("Purchase", back_populates="team", cascade="all, delete-orphan")
     beacon_tokens = relationship("GameTeamBeaconToken", back_populates="team", cascade="all, delete-orphan")
