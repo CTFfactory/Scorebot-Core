@@ -498,7 +498,7 @@ def init_db():
     migrations = [
         "ALTER TABLE games ADD COLUMN zero_out_time DATETIME",
         "ALTER TABLE games ADD COLUMN beacon_time INTEGER DEFAULT 300",
-        "ALTER TABLE hosts ADD COLUMN purchasable BOOLEAN DEFAULT 0",
+        "ALTER TABLE hosts ADD COLUMN purchasable BOOLEAN DEFAULT FALSE",
     ]
     for stmt in migrations:
         try:
