@@ -121,6 +121,9 @@ async def update_service_credentials(service_id: int, request: Request):
         token = body.get("token")
         username = body.get("username")
         password = body.get("password")
+        use_ssl = bool(body.get("use_ssl", False))
+        domain = body.get("domain", "")
+        private_key = body.get("private_key", "")
 
         if not token or not username or not password:
             raise HTTPException(status_code=400, detail="Missing token, username, or password")
@@ -140,11 +143,19 @@ async def update_service_credentials(service_id: int, request: Request):
             raise HTTPException(status_code=403, detail="You do not own this service")
 
         # Update or create Content
+        auth_payload = {
+            "username": username,
+            "password": password,
+            "use_ssl": use_ssl,
+            "domain": domain,
+            "private_key": private_key
+        }
+
         if not service.content:
             content = Content(
                 service_id=service.id,
                 type=service.application,
-                data=json.dumps({"auth": {"username": username, "password": password}})
+                data=json.dumps({"auth": auth_payload})
             )
             session.add(content)
         else:
@@ -154,10 +165,7 @@ async def update_service_credentials(service_id: int, request: Request):
                 content_data = {}
             if not isinstance(content_data, dict):
                 content_data = {}
-            if "auth" not in content_data:
-                content_data["auth"] = {}
-            content_data["auth"]["username"] = username
-            content_data["auth"]["password"] = password
+            content_data["auth"] = auth_payload
             service.content.data = json.dumps(content_data)
 
         session.commit()
