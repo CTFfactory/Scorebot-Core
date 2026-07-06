@@ -38,17 +38,17 @@ class Game(Base):
     status = Column(Integer, default=0)  # 0=created, 1=running, 2=paused, 3=finished
 
     # Default options directly on game
-    round_time = Column(Integer, default=15)
-    job_timeout = Column(Integer, default=30)
-    job_cleanup_time = Column(Integer, default=300)
-    flag_stolen_rate = Column(Integer, default=0)
-    flag_captured_multiplier = Column(Integer, default=1)
-    beacon_value = Column(Integer, default=10)
-    ticket_cost = Column(Integer, default=5)
-    ticket_max_score = Column(Integer, default=100)
-    ticket_grace_period = Column(Integer, default=60)
-    ticket_max_scoring = Column(Integer, default=3600)
-    ticket_reopen_multiplier = Column(Integer, default=200)
+    round_time = Column(Integer, default=300)
+    job_timeout = Column(Integer, default=300)
+    job_cleanup_time = Column(Integer, default=900)
+    flag_stolen_rate = Column(Integer, default=8400)
+    flag_captured_multiplier = Column(Integer, default=300)
+    beacon_value = Column(Integer, default=100)
+    ticket_cost = Column(Integer, default=125)
+    ticket_max_score = Column(Integer, default=6000)
+    ticket_grace_period = Column(Integer, default=900)
+    ticket_max_scoring = Column(Integer, default=14400)
+    ticket_reopen_multiplier = Column(Integer, default=10)
     score_exchange_rate = Column(Integer, default=100)  # exchange rate * 100
     host_ping_ratio = Column(Integer, default=50)
     beacon_time = Column(Integer, default=300)  # Beacon expiry timeout (seconds); original Options.beacon_time default = 300
