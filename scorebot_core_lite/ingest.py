@@ -345,7 +345,9 @@ def _populate_hosts(
         if not vm_instance or not role_name:
             continue
 
-        if role_name in INFRA_ROLES:
+        purchasable = bool(vm.get("purchasable", False))
+
+        if role_name in INFRA_ROLES and not purchasable:
             logger.debug("Skipping infra role VM: %s (%s)", vm_instance, role_name)
             continue
 
@@ -379,9 +381,6 @@ def _populate_hosts(
         else:
             logger.debug("VM %s color '%s' not in BLUE_COLORS, skipping", vm_instance, vm_color)
             continue
-
-        purchasable = bool(vm.get("purchasable", False))
-
         for team in target_teams:
             fqdn = f"{vm_instance}.{team.name}.{spec.event_name}.{dns_zone}"
             ip = host_ips.get(fqdn, "")   # pre-populate if pipeline provided it
