@@ -57,7 +57,7 @@ def _get_or_create_grey_token():
 API_TOKEN_GREY = _get_or_create_grey_token()
 
 SCORING_INTERVAL = int(os.getenv("SCORING_INTERVAL", "300"))
-CLEANUP_INTERVAL = int(os.getenv("CLEANUP_INTERVAL", "30"))
+CLEANUP_INTERVAL = int(os.getenv("CLEANUP_INTERVAL", "120"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")
 BEACON_IP = os.getenv("BEACON_IP")
