@@ -27,6 +27,31 @@ If `DATABASE_URL` does not start with `sqlite`, the initialization code switches
 
 ---
 
+## ACID Compliance & Concurrency Control
+
+Scorebot Core Lite is designed to support transactional ACID properties to ensure that scores, flag captures, and audit trails remain accurate under heavy concurrency:
+
+### 1. Atomicity (All or Nothing)
+Every gameplay mutation—such as a flag capture—involves multiple database operations (marking the flag captured, updating the attacker's score, deducting points from the victim, creating a `GameEvent`, and writing a `ScoreAudit` log).
+* **Implementation**: Core Lite wraps these multi-step updates in SQLAlchemy session transaction contexts. If any step fails (e.g., database disconnect or validation error), the entire transaction is rolled back via `session.rollback()`. No partial scoring state is ever committed.
+
+### 2. Consistency (State Validity)
+The database enforces consistency using declarative relational constraints:
+* Foreign Key cascades (`ondelete="CASCADE"`) guarantee that deleting a game cleanly purges teams, hosts, and services.
+* Database-level schemas and constraint mappings (e.g., `UniqueConstraint` on store pricing overrides) ensure invalid records are rejected at the driver level.
+
+### 3. Isolation (Independent Execution)
+Concurrency in Core Lite is managed through database locks to prevent lost-update anomalies (e.g. a scoring round writing scores at the same time an API call records a flag capture):
+* **SQLite WAL & Immediate Locking**: SQLite's standard isolation can lead to locking contentions (SQLITE_BUSY). To prevent this, Core Lite uses Write-Ahead Logging (WAL) and initiates write transactions using `BEGIN IMMEDIATE`. This locks the write lanes up-front, forcing concurrent API requests to wait sequentially while allowing parallel reads to continue unblocked.
+* **SQLAlchemy Row Locking**: Critical endpoints (such as `capture_flag` in `flag.py`) and scoring checks (in `engine.py`) execute explicit row locks using SQLAlchemy's `.with_for_update()`. This locks the team and flag rows within the database transaction, preventing overlapping concurrent writes from overwriting score updates.
+* **PostgreSQL / MySQL MVCC**: When using PostgreSQL, Multi-Version Concurrency Control (MVCC) provides robust snapshot isolation levels natively, allowing parallel processing without deadlocks.
+
+### 4. Durability (Crash Survivability)
+* **SQLite Durability**: Committed transactions are written to the Write-Ahead Log. The connection uses `PRAGMA synchronous=NORMAL`. This is safe against application-level crashes (e.g. process terminated or power cut to the app), though a sudden OS crash or hardware failure could result in losing the most recent un-synced database pages before they flush to disk. For environments where absolute hardware durability is required, configuration can be switched to `synchronous=FULL` (at the cost of slower write speeds).
+* **PostgreSQL / MySQL Durability**: Fully guaranteed via write-ahead logging (WAL) and disk flushes (fsync) managed by the host database system.
+
+---
+
 ## Database Selection Matrix
 
 To help choose the right database backend for your deployment, consult this decision matrix:
