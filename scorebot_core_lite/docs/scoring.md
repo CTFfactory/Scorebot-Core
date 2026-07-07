@@ -94,19 +94,72 @@ Ticketing is managed by competition administrators. Members of the **Gray Team**
 
 ---
 
-## 4. Flag Captures (Stealing Flags)
+## 4. Flag Lifecycle (Planting, DB Ingestion, and Capture)
 
-Flag capture runs via `POST /api/flag`. When an attacker submits a valid flag planted on a victim host:
+Flags in Scorebot represent high-value cryptographic files or database entries (e.g. `FLAG{w3lc0m3_t0_th3_r4ng3}`) planted on range machines. The lifecycle of a flag is managed through range automation and scoring endpoints:
 
-1. **Attacker Reward**: The attacker team receives points scaled by a game multiplier:
-   $$\text{Attacker Flags Score} = \text{Attacker Flags Score} + (\text{flag.value} \times \text{game.flag\_captured\_multiplier})$$
-2. **Victim Penalty**: The victim team loses points. The penalty amount depends on the game config:
-   * If `game.flag_stolen_rate` is greater than $0$, the victim loses that fixed rate:
-     $$\text{Victim Flags Score} = \text{Victim Flags Score} - \text{game.flag\_stolen\_rate}$$
-   * Otherwise, the victim loses the same amount awarded to the attacker:
-     $$\text{Victim Flags Score} = \text{Victim Flags Score} - (\text{flag.value} \times \text{game.flag\_captured\_multiplier})$$
-3. **Capture State Lock**: The flag's `captured_team_id` is set to the attacker's ID, locking it against further capture attempts.
-4. **Hint System**: The system returns the description of a random, uncaptured flag owned by the same victim team to help the attacker navigate their next exploit.
+```mermaid
+graph TD
+    Prov[Range Provisioner (Ansible)] -->|Plant file on VM| VM[Target Host VM]
+    Prov -->|Execute SQL Insert| DB[(Database flags table)]
+    Red[Red Team / Exploiter] -->|Locates flag on VM| VM
+    Red -->|POST /api/flag| API[FastAPI api/flag.py]
+    API -->|Validate & Lock| DB
+    API -->|Award Attacker & Deduct Victim| Score[Scoring Engine]
+    API -->|Select Hint| Hint[Return Random Uncaptured Flag Description]
+```
+
+### 1. How Flags are Generated and Planted
+Because Scorebot Core Lite prioritizes automated GitOps pipelines, there is no manual CRUD form for flags inside the admin dashboard. Instead, flags are introduced during range provisioning:
+1. **Dynamic Generation**: When provisioning playbooks (e.g., Ansible roles) build a target VM, they generate a random flag string.
+2. **File Planting**: The playbook writes this flag string into a local asset on the VM (for example, `/root/flag.txt`, an environment variable, a database cell, or registry key).
+3. **Database Ingest**: The provisioning pipeline executes an SQL insert query or calls a setup script to write the flag record directly to the `flags` table in the database:
+   ```sql
+   INSERT INTO flags (name, flag, enabled, description, value, host_id, team_id)
+   VALUES ('Database Root Key', 'FLAG{d3mo_fl4g_123}', 1, 'Found in /root/flag.txt', 100, 15, 3);
+   ```
+   * **`host_id`**: Binds the flag to the specific machine FQDN.
+   * **`team_id`**: Identifies the defensive Blue Team owner who must guard the flag (if stolen, this team suffers point deductions).
+
+### 2. Flag Capture Submission & Verification
+Contestants submit flags using HTTP POST requests to `/api/flag` (or the multi-flag `/api/flags` endpoint):
+
+```json
+{
+  "token": "attacker-team-token-here",
+  "flag": "FLAG{d3mo_fl4g_123}"
+}
+```
+
+* **Step 1: Authenticate Team**: The API checks the `token` parameter to find the submitting team.
+* **Step 2: Validate Flag Status**: The API queries the `flags` table for the matching flag string. The capture is validated against the following rules:
+  * The flag must exist and be enabled (`enabled = True`).
+  * The submitting team must **not** be the owner of the flag (`flag.team_id != attacker.id`). Teams cannot submit their own flags.
+  * The flag must not have been captured by this team already (`flag.captured_team_id` is null).
+* **Step 3: State Locking**: Once a valid capture is processed, `flag.captured_team_id` is set to the attacker's team ID. This locks the flag from being captured again by the same attacker.
+
+### 3. Points Calculation
+Upon successful capture, scores are calculated and written atomically inside a database lock:
+
+* **Attacker Reward**: Awarded points based on the flag's point value multiplied by the game's captured multiplier:
+  $$\text{Attacker Flags Score} = \text{Attacker Flags Score} + (\text{flag.value} \times \text{game.flag\_captured\_multiplier})$$
+* **Victim Penalty**: Deducted points to penalize defensive failures:
+  * If the game has a custom `flag_stolen_rate` configured (e.g., $150$ points), the victim loses exactly that fixed amount:
+    $$\text{Victim Flags Score} = \text{Victim Flags Score} - \text{game.flag\_stolen\_rate}$$
+  * If `flag_stolen_rate` is set to $0$, the victim is deducted the same amount the attacker earned:
+    $$\text{Victim Flags Score} = \text{Victim Flags Score} - (\text{flag.value} \times \text{game.flag\_captured\_multiplier})$$
+
+### 4. Pluggable Notifications & Hints
+1. **Notifications**: A `GameEvent` record is inserted to push an alert to the scoreboard, and any configured external notification hooks (Discord, Slack, Twitter/X) are triggered.
+2. **Next Exploit Hints**: To keep gameplay engaging, the API queries all remaining uncaptured flags belonging to the same victim team:
+   ```python
+   victim_flags = session.query(Flag).filter(
+       Flag.team_id == victim.id,
+       Flag.enabled == True,
+       Flag.captured_team_id == None
+   ).all()
+   ```
+   If uncaptured flags remain, the API randomly selects one and returns its `description` in the response body as a hint (e.g. `"description": "Check the web configuration directory next!"`).
 
 ---
 
