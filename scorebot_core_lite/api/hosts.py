@@ -119,14 +119,10 @@ async def update_service_credentials(service_id: int, request: Request):
             raise HTTPException(status_code=400, detail="Invalid JSON")
 
         token = body.get("token")
-        username = body.get("username")
-        password = body.get("password")
-        use_ssl = bool(body.get("use_ssl", False))
-        domain = body.get("domain", "")
-        private_key = body.get("private_key", "")
+        clear = body.get("clear", False)
 
-        if not token or not username or not password:
-            raise HTTPException(status_code=400, detail="Missing token, username, or password")
+        if not token:
+            raise HTTPException(status_code=400, detail="Missing token")
 
         # Find team
         team = session.query(GameTeam).filter(GameTeam.token == token).first()
@@ -141,6 +137,27 @@ async def update_service_credentials(service_id: int, request: Request):
         # Verify host ownership
         if not service.host or service.host.team_id != team.id:
             raise HTTPException(status_code=403, detail="You do not own this service")
+
+        if clear:
+            if service.content:
+                try:
+                    content_data = json.loads(service.content.data)
+                except Exception:
+                    content_data = {}
+                if "auth" in content_data:
+                    del content_data["auth"]
+                service.content.data = json.dumps(content_data)
+                session.commit()
+            return {"status": "success", "message": "Credentials cleared"}
+
+        username = body.get("username")
+        password = body.get("password")
+        use_ssl = bool(body.get("use_ssl", False))
+        domain = body.get("domain", "")
+        private_key = body.get("private_key", "")
+
+        if not username or not password:
+            raise HTTPException(status_code=400, detail="Missing username or password")
 
         # Update or create Content
         auth_payload = {
