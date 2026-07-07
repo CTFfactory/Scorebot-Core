@@ -94,32 +94,22 @@ Ticketing is managed by competition administrators. Members of the **Gray Team**
 
 ---
 
-## 4. Flag Lifecycle (Planting, DB Ingestion, and Capture)
+## 4. Flag Lifecycle (DB Records & Capture Validation)
 
-Flags in Scorebot represent high-value cryptographic files or database entries (e.g. `FLAG{w3lc0m3_t0_th3_r4ng3}`) planted on range machines. The lifecycle of a flag is managed through range automation and scoring endpoints:
+Flags in Scorebot represent high-value cryptographic files or database entries (e.g., `FLAG{w3lc0m3_t0_th3_r4ng3}`) residing on range machines. 
 
-```mermaid
-graph TD
-    Prov[Range Provisioner (Ansible)] -->|Plant file on VM| VM[Target Host VM]
-    Prov -->|Execute SQL Insert| DB[(Database flags table)]
-    Red[Red Team / Exploiter] -->|Locates flag on VM| VM
-    Red -->|POST /api/flag| API[FastAPI api/flag.py]
-    API -->|Validate & Lock| DB
-    API -->|Award Attacker & Deduct Victim| Score[Scoring Engine]
-    API -->|Select Hint| Hint[Return Random Uncaptured Flag Description]
+### 1. Database Population Status
+> [!IMPORTANT]
+> The automated pipeline to dynamically generate, plant on VMs, and inject flags into the database is **not yet implemented**. 
+> Currently, flags must be introduced to the database manually or via custom SQL scripts before the game begins. Refer to the [Roadmap Guide](roadmap.md) for the high-level design and requirements of the planned automation pipeline.
+
+To introduce a flag to the game database, administrators must insert a record directly into the `flags` SQL table:
+```sql
+INSERT INTO flags (name, flag, enabled, description, value, host_id, team_id)
+VALUES ('Database Root Key', 'FLAG{d3mo_fl4g_123}', 1, 'Found in /root/flag.txt', 100, 15, 3);
 ```
-
-### 1. How Flags are Generated and Planted
-Because Scorebot Core Lite prioritizes automated GitOps pipelines, there is no manual CRUD form for flags inside the admin dashboard. Instead, flags are introduced during range provisioning:
-1. **Dynamic Generation**: When provisioning playbooks (e.g., Ansible roles) build a target VM, they generate a random flag string.
-2. **File Planting**: The playbook writes this flag string into a local asset on the VM (for example, `/root/flag.txt`, an environment variable, a database cell, or registry key).
-3. **Database Ingest**: The provisioning pipeline executes an SQL insert query or calls a setup script to write the flag record directly to the `flags` table in the database:
-   ```sql
-   INSERT INTO flags (name, flag, enabled, description, value, host_id, team_id)
-   VALUES ('Database Root Key', 'FLAG{d3mo_fl4g_123}', 1, 'Found in /root/flag.txt', 100, 15, 3);
-   ```
-   * **`host_id`**: Binds the flag to the specific machine FQDN.
-   * **`team_id`**: Identifies the defensive Blue Team owner who must guard the flag (if stolen, this team suffers point deductions).
+* **`host_id`**: Binds the flag to the specific machine FQDN.
+* **`team_id`**: Identifies the defensive Blue Team owner who must guard the flag (if stolen, this team suffers point deductions).
 
 ### 2. Flag Capture Submission & Verification
 Contestants submit flags using HTTP POST requests to `/api/flag` (or the multi-flag `/api/flags` endpoint):
