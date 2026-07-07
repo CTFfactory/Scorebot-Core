@@ -115,7 +115,7 @@ async def submit_job(request: Request):
                         if "content" in js and service.content:
                             try:
                                 service.content.status = int(js["content"].get("status", 0))
-                            except (TypeError, ValueError):
+                            except (TypeError, ValueError, AttributeError):
                                 service.content.status = 0
                         matched = True
                         break
