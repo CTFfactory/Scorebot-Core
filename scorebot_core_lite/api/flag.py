@@ -149,6 +149,26 @@ def register_flag(game_id: int, host_id: int, data: AdminFlagCreateSchema):
                 "message": "Flag already registered"
             }
 
+        # Check if a flag with the same name on the same host already exists
+        existing_by_name = session.query(Flag).filter(
+            Flag.host_id == host_id,
+            Flag.name == data.name
+        ).first()
+
+        if existing_by_name:
+            existing_by_name.flag = data.flag
+            existing_by_name.description = data.description
+            existing_by_name.value = data.value
+            existing_by_name.enabled = True
+            existing_by_name.captured_team_id = None
+            session.commit()
+            session.refresh(existing_by_name)
+            return {
+                "status": "success",
+                "flag_id": existing_by_name.id,
+                "message": f"Flag '{data.name}' updated successfully for host {host.fqdn}"
+            }
+
         flag = Flag(
             name=data.name,
             flag=data.flag,
