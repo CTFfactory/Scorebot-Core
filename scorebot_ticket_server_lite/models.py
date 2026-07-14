@@ -15,6 +15,7 @@ class Ticket(Base):
     team_name = Column(String, nullable=True)
     status = Column(String, default="open") # "open", "closed"
     total_penalty = Column(Integer, default=0)
+    point_value = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 

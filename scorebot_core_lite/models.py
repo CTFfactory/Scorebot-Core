@@ -367,6 +367,7 @@ class GameTicket(Base):
     closed = Column(Boolean, default=False)
     started = Column(DateTime, default=datetime.datetime.utcnow)
     total = Column(Integer, default=0)
+    point_value = Column(Integer, default=0)
     description = Column(Text, nullable=False)
     team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="CASCADE"), nullable=False)
     type = Column(Integer, default=0)
@@ -524,6 +525,7 @@ def init_db():
         "ALTER TABLE games ADD COLUMN zero_out_time DATETIME",
         "ALTER TABLE games ADD COLUMN beacon_time INTEGER DEFAULT 300",
         "ALTER TABLE hosts ADD COLUMN purchasable BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE game_tickets ADD COLUMN point_value INTEGER DEFAULT 0",
     ]
     for stmt in migrations:
         try:

@@ -121,23 +121,9 @@ def score_round(session, game_id: int):
                 logger.debug(f"Victim Team {victim_team.name} deducted {game.beacon_value} points due to active beacon on host {ch.ip} (attacker: {compromise.attacker.name})")
 
     # 3. Score open tickets
-    for team in game.teams:
-        for ticket in team.tickets:
-            if not ticket.closed:
-                open_time = (now - ticket.started).total_seconds()
-                if open_time >= game.ticket_max_scoring:
-                    continue
-                if open_time > game.ticket_grace_period:
-                    if ticket.total < game.ticket_max_score:
-                        ticket.total += game.ticket_cost
-                        team.score_tickets -= game.ticket_cost
-                        session.add(ScoreAudit(
-                            team_id=team.id,
-                            source="TICKET-OPEN",
-                            amount=-game.ticket_cost,
-                            description=f"Deduction for open ticket {ticket.name}"
-                        ))
-                        logger.debug(f"Team {team.name} Ticket {ticket.name} scored: ticket total cost={ticket.total}, team score ticket deduction={game.ticket_cost}")
+    # In the refactored ticket scoring model, open tickets do not accumulate penalty points.
+    # Teams are awarded the point value of a ticket only when the Gray team closes it.
+    pass
 
     # 4. Take ScoreHistory Snapshots
     for team in game.teams:

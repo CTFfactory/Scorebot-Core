@@ -14,6 +14,12 @@ from scorebot_ticket_server_lite import models
 
 # Initialize Database tables
 Base.metadata.create_all(bind=engine)
+from sqlalchemy import text
+try:
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE tickets ADD COLUMN point_value INTEGER DEFAULT 0"))
+except Exception:
+    pass
 
 app = FastAPI(title="Scorebot Ticket Server Lite")
 
@@ -106,7 +112,8 @@ def sync_ticket_to_core(ticket: models.Ticket):
                 "details": ticket.description or "",
                 "team": ticket.team_token,
                 "type": "service" if ticket.category == 0 else "host",
-                "status": ticket.status
+                "status": ticket.status,
+                "point_value": ticket.point_value
             }
         ]
     }
@@ -183,6 +190,7 @@ async def create_ticket(
     category: int = Form(0),
     team_token: str = Form(...),
     team_name: str = Form(None),
+    point_value: int = Form(0),
     db: Session = Depends(get_db)
 ):
     verify_admin_auth(request)
@@ -199,6 +207,7 @@ async def create_ticket(
         category=category,
         team_token=team_token,
         team_name=team_name or "Unknown Team",
+        point_value=point_value,
         status="open"
     )
     db.add(ticket)

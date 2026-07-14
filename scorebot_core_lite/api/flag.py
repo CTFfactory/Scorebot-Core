@@ -1,8 +1,10 @@
 import random
 import datetime
+from pydantic import BaseModel
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Request
-from scorebot_core_lite.models import SessionLocal, GameTeam, Flag, GameEvent, ScoreAudit
-from scorebot_core_lite.auth import verify_cli_token
+from scorebot_core_lite.models import SessionLocal, GameTeam, Flag, GameEvent, ScoreAudit, Host
+from scorebot_core_lite.auth import verify_cli_token, verify_admin_token
 from scorebot_core_lite.scoring.notifications import send_notification
 
 router = APIRouter()
@@ -118,3 +120,52 @@ async def capture_flag(request: Request):
 async def legacy_capture_flag(request: Request):
     """Legacy endpoint for submitting a captured flag."""
     return await capture_flag(request)
+
+
+class AdminFlagCreateSchema(BaseModel):
+    name: str
+    flag: str
+    value: int = 100
+    description: str = ""
+
+
+@router.post("/api/admin/games/{game_id}/hosts/{host_id}/flags", dependencies=[Depends(verify_admin_token)])
+def register_flag(game_id: int, host_id: int, data: AdminFlagCreateSchema):
+    """Admin endpoint to dynamically register a generated flag for a host."""
+    session = SessionLocal()
+    try:
+        host = session.query(Host).filter(Host.id == host_id).first()
+        if not host:
+            raise HTTPException(status_code=404, detail="Host not found")
+        if not host.team or host.team.game_id != game_id:
+            raise HTTPException(status_code=400, detail="Host team does not belong to the specified game")
+
+        # Check if flag string already exists to avoid duplicates
+        existing = session.query(Flag).filter(Flag.flag == data.flag).first()
+        if existing:
+            return {
+                "status": "success",
+                "flag_id": existing.id,
+                "message": "Flag already registered"
+            }
+
+        flag = Flag(
+            name=data.name,
+            flag=data.flag,
+            enabled=True,
+            description=data.description,
+            value=data.value,
+            host_id=host_id,
+            team_id=host.team_id
+        )
+        session.add(flag)
+        session.commit()
+        session.refresh(flag)
+        return {
+            "status": "success",
+            "flag_id": flag.id,
+            "message": f"Flag '{data.name}' registered successfully for host {host.fqdn}"
+        }
+    finally:
+        session.close()
+

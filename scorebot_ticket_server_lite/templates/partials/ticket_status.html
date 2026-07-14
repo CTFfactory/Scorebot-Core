@@ -1,7 +1,7 @@
 <div class="flex items-center justify-between bg-slate-950 p-4 rounded-lg border border-slate-800" id="ticket-meta-{{ ticket.id }}">
     <div>
         <h3 class="text-lg font-bold text-slate-100">{{ ticket.title }}</h3>
-        <p class="text-xs text-slate-500 mt-1">Ticket ID: {{ ticket.ticket_id }} &bull; Team: {{ ticket.team_name }}</p>
+        <p class="text-xs text-slate-500 mt-1">Ticket ID: {{ ticket.ticket_id }} &bull; Team: {{ ticket.team_name }} &bull; Value: <span class="text-emerald-400 font-semibold">{{ ticket.point_value }} pts</span></p>
     </div>
     <div class="flex items-center space-x-3">
         <span class="px-2.5 py-1 text-xs font-semibold rounded-full 

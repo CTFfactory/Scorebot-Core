@@ -4,7 +4,7 @@
      hx-target="#messages-container"
      hx-swap="innerHTML">
     <div class="truncate max-w-[70%]">
-        <span class="text-[10px] text-slate-500 block">ID: {{ ticket.ticket_id }} &bull; {{ ticket.team_name }}</span>
+        <span class="text-[10px] text-slate-500 block">ID: {{ ticket.ticket_id }} &bull; {{ ticket.team_name }} &bull; {{ ticket.point_value }} pts</span>
         <h3 class="font-medium text-sm text-slate-200 truncate">{{ ticket.title }}</h3>
     </div>
     <span id="badge-{{ ticket.id }}" class="px-2 py-0.5 text-[10px] font-semibold rounded-full 

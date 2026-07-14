@@ -32,6 +32,7 @@ async def submit_tickets(request: Request):
             
             status = str(td.get("status", "open")).lower()
             team_token = td.get("team")
+            point_value = int(td.get("point_value", 0))
 
             if not t_id or not name or not team_token:
                 raise HTTPException(status_code=400, detail="Missing ticket ID, name or team token")
@@ -51,6 +52,7 @@ async def submit_tickets(request: Request):
                     closed=False,
                     started=datetime.datetime.utcnow(),
                     total=0,
+                    point_value=point_value,
                     team_id=team.id,
                     type=1 if t_type.lower() == "service" else 2
                 )
@@ -58,19 +60,20 @@ async def submit_tickets(request: Request):
                 session.commit()
                 session.refresh(ticket)
 
+            ticket.point_value = point_value
+
             # Check status transition
             target_closed = (status == "closed")
             if not ticket.closed and target_closed:
-                # Close Ticket: Give back points
+                # Close Ticket: Award points
                 ticket.closed = True
                 team = ticket.team
-                refund = ticket.total if ticket.type == 1 else int(ticket.total / 2)
-                team.score_tickets += refund
+                team.score_tickets += point_value
                 
                 session.add(ScoreAudit(
                     team_id=team.id,
                     source="TICKET-CLOSE",
-                    amount=refund,
+                    amount=point_value,
                     description=f"Closed ticket {ticket.name}"
                 ))
 
@@ -88,15 +91,12 @@ async def submit_tickets(request: Request):
                 # Reopen Ticket: Deduct points
                 ticket.closed = False
                 team = ticket.team
-                game = team.game
-                multiplier = (game.ticket_reopen_multiplier / 100.0) if game else 2.0
-                deduction = int(multiplier * ticket.total)
-                team.score_tickets -= deduction
+                team.score_tickets -= point_value
 
                 session.add(ScoreAudit(
                     team_id=team.id,
                     source="TICKET-REOPEN",
-                    amount=-deduction,
+                    amount=-point_value,
                     description=f"Reopened ticket {ticket.name}"
                 ))
 
