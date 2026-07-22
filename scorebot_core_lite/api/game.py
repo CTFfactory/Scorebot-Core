@@ -59,6 +59,8 @@ class GameImportSchema(BaseModel):
     host_ips: Optional[Dict[str, str]] = None      # {"fqdn": "10.x.x.y"} — pre-populate IPs at import time
     game_definitions_db: Optional[Dict] = None     # Full compiled DB from VAR_GAME_DEFINITIONS_DB
     mode: int = 0
+    sync: bool = True
+
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +125,7 @@ def import_game(data: GameImportSchema):
     try:
         # Idempotency: if this game name already exists, return it.
         existing = session.query(Game).filter(Game.name == spec.game_name).first()
-        if existing:
+        if existing and not data.sync:
             logger.info("Game '%s' already exists (id=%d), skipping import", spec.game_name, existing.id)
             return {
                 "game_id": existing.id,
@@ -140,6 +142,151 @@ def import_game(data: GameImportSchema):
                 return datetime.datetime.fromisoformat(s.replace("Z", "+00:00")).replace(tzinfo=None)
             except (ValueError, AttributeError):
                 return None
+
+        if existing and data.sync:
+            game = existing
+            if spec.game_start:
+                game.start = _parse_dt(spec.game_start)
+            if spec.game_end:
+                game.finish = _parse_dt(spec.game_end)
+
+            teams_created = 0
+            hosts_created = 0
+            hosts_deleted = 0
+            services_created = 0
+            services_deleted = 0
+            services_updated = 0
+
+            # Map existing teams by lowercased name
+            db_teams = {t.name.lower(): t for t in game.teams}
+            processed_team_ids = set()
+
+            for team_spec in spec.teams:
+                if team_spec.name.lower() == "gold":
+                    logger.info("Skipping import of team '%s' (Gold Team)", team_spec.name)
+                    continue
+                color_int = _team_color(team_spec.name, team_spec.color)
+                team_name_lower = team_spec.name.lower()
+
+                if team_name_lower in db_teams:
+                    team = db_teams[team_name_lower]
+                    team.subnet = team_spec.subnet or ""
+                    team.color = color_int
+                else:
+                    team = GameTeam(
+                        name=team_spec.name,
+                        subnet=team_spec.subnet or "",
+                        color=color_int,
+                        offensive=False,
+                        minimal=False,
+                        game_id=game.id,
+                    )
+                    session.add(team)
+                    session.flush()
+                    teams_created += 1
+                processed_team_ids.add(team.id)
+
+                # Reconcile hosts for this team
+                db_hosts = {h.fqdn.lower(): h for h in team.hosts}
+                spec_fqdns = set()
+
+                for host_spec in team_spec.hosts:
+                    host_fqdn_lower = host_spec.fqdn.lower()
+                    if host_fqdn_lower in db_hosts:
+                        host = db_hosts[host_fqdn_lower]
+                        host.name = host_spec.fqdn.split(".")[0]
+                        if host_spec.ip:
+                            host.ip = host_spec.ip
+                        host.purchasable = host_spec.purchasable
+                    else:
+                        host = Host(
+                            fqdn=host_spec.fqdn,
+                            name=host_spec.fqdn.split(".")[0],
+                            ip=host_spec.ip,
+                            online=False,
+                            team_id=team.id,
+                            purchasable=host_spec.purchasable,
+                        )
+                        session.add(host)
+                        session.flush()
+                        hosts_created += 1
+                    spec_fqdns.add(host_fqdn_lower)
+
+                    # Reconcile services on this host
+                    db_services = {(s.port, s.protocol): s for s in host.services}
+                    spec_services = set()
+
+                    for svc_spec in host_spec.services:
+                        proto = 2 if svc_spec.protocol == "UDP" else 1
+                        key = (svc_spec.port, proto)
+                        if key in db_services:
+                            svc = db_services[key]
+                            if (svc.name != svc_spec.name[:64] or 
+                                    svc.value != svc_spec.points or 
+                                    svc.application != svc_spec.application[:64]):
+                                svc.name = svc_spec.name[:64]
+                                svc.value = svc_spec.points
+                                svc.application = svc_spec.application[:64]
+                                services_updated += 1
+                        else:
+                            svc = Service(
+                                port=svc_spec.port,
+                                name=svc_spec.name[:64],
+                                value=svc_spec.points,
+                                bonus=False,
+                                application=svc_spec.application[:64],
+                                protocol=proto,
+                                status=2,
+                                host_id=host.id,
+                            )
+                            session.add(svc)
+                            services_created += 1
+                        spec_services.add(key)
+
+                    # Delete removed services
+                    for key, svc in db_services.items():
+                        if key not in spec_services:
+                            session.delete(svc)
+                            services_deleted += 1
+
+                # Delete removed hosts for this team
+                for fqdn, host in db_hosts.items():
+                    if fqdn not in spec_fqdns:
+                        services_deleted += len(host.services)
+                        session.delete(host)
+                        hosts_deleted += 1
+
+            # Delete teams that are completely removed in the new spec
+            for team_name_lower, team in db_teams.items():
+                if team.id not in processed_team_ids:
+                    for host in team.hosts:
+                        services_deleted += len(host.services)
+                        hosts_deleted += 1
+                    session.delete(team)
+
+            session.commit()
+            logger.info(
+                "Synced game '%s' (id=%d): +%d teams, +%d/-%d hosts, +%d/-%d services, *%d services updated",
+                game.name, game.id, teams_created, hosts_created, hosts_deleted,
+                services_created, services_deleted, services_updated
+            )
+            return {
+                "game_id": game.id,
+                "game_name": game.name,
+                "status": "synced",
+                "teams_created": teams_created,
+                "hosts_created": hosts_created,
+                "hosts_deleted": hosts_deleted,
+                "services_created": services_created,
+                "services_deleted": services_deleted,
+                "services_updated": services_updated,
+                "message": (
+                    f"Game '{game.name}' synced successfully. "
+                    f"Added {hosts_created} hosts, {services_created} services. "
+                    f"Deleted {hosts_deleted} hosts, {services_deleted} services. "
+                    f"Updated {services_updated} services."
+                ),
+            }
 
         # Create the Game row.
         game = Game(

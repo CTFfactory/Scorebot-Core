@@ -9,11 +9,11 @@ This document highlights the key differences in architecture, database storage, 
 | Feature | Scorebot Core (Django) | Scorebot Core Lite (FastAPI) |
 | :--- | :--- | :--- |
 | **Framework** | Django 4.x / 5.x | FastAPI (ASGI / Starlette) |
-| **Database Support** | PostgreSQL / MySQL / Oracle | SQLite (optimized) / PostgreSQL / MySQL |
+| **Database Support** | PostgreSQL / MySQL | PostgreSQL (Production) / SQLite (Local Dev) |
 | **Routing Model** | Synchronous (Django ORM & Views) | Asynchronous (`async`/`await` routing) |
-| **Background Jobs** | Celery / external cron / management daemons | Internal multi-threaded `SchedulerDaemon` |
-| **System Footprint** | Large (requires Redis/RabbitMQ, PG database) | Small (standalone python process + SQLite WAL) |
-| **Deployment Complexity**| High (requires multiple systemd units/containers) | Very Low (single systemd service or Docker container) |
+| **Background Jobs** | Standalone daemon process (`daemon.py`) | Internal multi-threaded `SchedulerDaemon` |
+| **System Footprint** | Moderate (requires web server + separate daemon process + database) | Small (single Python process + database) |
+| **Deployment Complexity**| Moderate (requires managing two separate processes/services) | Very Low (single systemd service or Docker container) |
 | **Ingestion Engine** | Django Admin / manual migrations / custom models | REST endpoints `/api/admin/games/import` / JSON blobs |
 
 ---
@@ -21,12 +21,12 @@ This document highlights the key differences in architecture, database storage, 
 ## Architectural & Framework Differences
 
 ### 1. Monolithic vs. Lightweight Design
-* **Scorebot Core** leverages Django's mature monolithic model. It includes Django Admin interface, Django ORM, and complex relational models split across multiple apps (`scorebot_core`, `scorebot_game`, `scorebot_grid`, `scorebot_html`). It is designed to act as an enterprise-grade CTF orchestration tool but requires setting up message brokers (like Redis) and process executors.
+* **Scorebot Core** leverages Django's mature monolithic model. It includes Django Admin interface, Django ORM, and complex relational models split across multiple apps (`scorebot_core`, `scorebot_game`, `scorebot_grid`, `scorebot_html`). It runs the web app and the scoring engine as separate runtime processes (e.g., via `daemon.py` and `manage.py runserver`) sharing a common database.
 * **Scorebot Core Lite** is refactored around FastAPI. It strips out the heavy template engines and ORM overhead in favor of a lean SQLAlchemy layer. It serves the scoreboard, ticket manager, beacon receiver, and admin dashboard as a unified async service.
 
 ### 2. Database Paradigms
-* **Scorebot Core** expects PostgreSQL or MySQL, taking advantage of transactional isolation levels.
-* **Scorebot Core Lite** is built with SQLite compatibility at its center. Through custom connection pooling hooks (`models.py`) and write-ahead logging (WAL) optimizations, Core Lite achieves safe, high-speed concurrent writes on SQLite, removing the operational overhead of hosting separate database servers.
+* **Scorebot Core** is typically configured with MySQL or PostgreSQL, taking advantage of transactional isolation levels.
+* **Scorebot Core Lite** uses PostgreSQL as its primary production relational database to handle high write concurrency cleanly. For local dev and offline environments, it utilizes an optimized SQLite configuration (WAL mode and immediate transactions) to eliminate database setup overhead while avoiding locks.
 
 ---
 
