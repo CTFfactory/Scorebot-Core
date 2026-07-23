@@ -259,6 +259,8 @@ def import_game(data: GameImportSchema):
             # Delete teams that are completely removed in the new spec
             for team_name_lower, team in db_teams.items():
                 if team.id not in processed_team_ids:
+                    if team.offensive or team.name.lower() == "red":
+                        continue
                     for host in team.hosts:
                         services_deleted += len(host.services)
                         hosts_deleted += 1
