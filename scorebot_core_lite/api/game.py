@@ -601,6 +601,7 @@ def get_game_details(game_id: int):
             "ticket_reopen_multiplier": game.ticket_reopen_multiplier,
             "score_exchange_rate": game.score_exchange_rate,
             "host_ping_ratio": game.host_ping_ratio,
+            "authenticated_checks": game.authenticated_checks,
             "zero_out_time": game.zero_out_time.isoformat() if game.zero_out_time else None,
             "teams": teams_list
         }
@@ -622,6 +623,7 @@ class GameParametersSchema(BaseModel):
     ticket_reopen_multiplier: Optional[int] = None
     score_exchange_rate: Optional[int] = None
     host_ping_ratio: Optional[int] = None
+    authenticated_checks: Optional[bool] = None
 
 
 @router.put("/api/admin/games/{game_id}/parameters", dependencies=[Depends(verify_admin_token)])

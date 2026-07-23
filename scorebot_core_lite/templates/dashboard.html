@@ -616,6 +616,10 @@
                                                 <label>Ping Ratio (%)</label>
                                                 <input type="number" name="host_ping_ratio" value="${game.host_ping_ratio || 50}" required>
                                             </div>
+                                            <div class="form-group" style="grid-column: span 2; display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                                                <input type="checkbox" name="authenticated_checks" id="auth-checks-${gameId}" ${game.authenticated_checks ? 'checked' : ''} style="width: auto; margin: 0;">
+                                                <label for="auth-checks-${gameId}" style="margin: 0; color: #e5e7eb; cursor: pointer; font-size: 0.85rem;">Enable Authenticated Checks (MySQL login, SSH Paramiko validation)</label>
+                                            </div>
                                         </div>
                                         <button type="submit" class="btn btn-sm btn-success" style="width: 100%; margin-top: 1rem;">Save Parameters</button>
                                     </form>
@@ -832,9 +836,15 @@
         async function saveParameters(e, gameId) {
             e.preventDefault();
             const form = e.target;
-            const data = {};
+            const data = {
+                authenticated_checks: false
+            };
             new FormData(form).forEach((val, key) => {
-                data[key] = parseInt(val);
+                if (key === 'authenticated_checks') {
+                    data[key] = true;
+                } else {
+                    data[key] = parseInt(val);
+                }
             });
 
             const res = await fetch(`/api/admin/games/${gameId}/parameters`, {

@@ -53,6 +53,7 @@ class Game(Base):
     host_ping_ratio = Column(Integer, default=50)
     beacon_time = Column(Integer, default=300)  # Beacon expiry timeout (seconds); original Options.beacon_time default = 300
     zero_out_time = Column(DateTime, nullable=True)
+    authenticated_checks = Column(Boolean, default=False)
 
     teams = relationship("GameTeam", back_populates="game", cascade="all, delete-orphan")
     events = relationship("GameEvent", back_populates="game", cascade="all, delete-orphan")
@@ -236,6 +237,7 @@ class Host(Base):
             },
             "dns": [dns_ip],
             "timeout": self.team.game.round_time if (self.team and self.team.game) else 15,
+            "authenticated_checks": self.team.game.authenticated_checks if (self.team and self.team.game) else False,
         }
 
 
@@ -526,6 +528,7 @@ def init_db():
         "ALTER TABLE games ADD COLUMN beacon_time INTEGER DEFAULT 300",
         "ALTER TABLE hosts ADD COLUMN purchasable BOOLEAN DEFAULT FALSE",
         "ALTER TABLE game_tickets ADD COLUMN point_value INTEGER DEFAULT 0",
+        "ALTER TABLE games ADD COLUMN authenticated_checks BOOLEAN DEFAULT FALSE",
     ]
     for stmt in migrations:
         try:
