@@ -5,6 +5,7 @@ from scorebot_core_lite.auth import verify_cli_token
 router = APIRouter()
 
 @router.get("/api/mapper/{game_id}", dependencies=[Depends(verify_cli_token)])
+@router.get("/api/mapper/{game_id}/", dependencies=[Depends(verify_cli_token)])
 def get_uuid_mapping(game_id: int):
     """Retrieve UUID to Team name mappings for a running game."""
     session = SessionLocal()

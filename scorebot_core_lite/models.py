@@ -18,6 +18,7 @@
 import json
 import uuid
 import datetime
+from typing import Optional, Set
 from sqlalchemy import (
     create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, text, UniqueConstraint
 )
@@ -140,7 +141,6 @@ class GameTeam(Base):
         return beacons
 
     def get_json_scoreboard(self):
-        # Calculate captured flags by this team (captured relationship mapping)
         from sqlalchemy.orm import object_session
         session = object_session(self)
         close_session = False
@@ -148,32 +148,36 @@ class GameTeam(Base):
             session = SessionLocal()
             close_session = True
         try:
-            captured_flags_count = len(session.query(Flag).filter(Flag.captured_team_id == self.id).all())
-            open_flags = len([f for f in self.flags if f.enabled and f.captured_team_id is None])
-            lost_flags = len([f for f in self.flags if f.enabled and f.captured_team_id is not None])
-            open_tickets = len([t for t in self.tickets if not t.closed])
-            closed_tickets = len([t for t in self.tickets if t.closed])
+            captured_flags_count = session.query(Flag).filter(Flag.captured_team_id == self.id).count()
+            open_flags = session.query(Flag).filter(Flag.team_id == self.id, Flag.enabled == True, Flag.captured_team_id.is_(None)).count()
+            lost_flags = session.query(Flag).filter(Flag.team_id == self.id, Flag.enabled == True, Flag.captured_team_id.isnot(None)).count()
+            open_tickets = session.query(GameTicket).filter(GameTicket.team_id == self.id, GameTicket.closed == False).count()
+            closed_tickets = session.query(GameTicket).filter(GameTicket.team_id == self.id, GameTicket.closed == True).count()
+
+            # Batch pre-fetch purchases for this team to avoid N+1 queries during host accessibility checks
+            purchases = session.query(Purchase.item).filter(Purchase.team_id == self.id).all()
+            purchased_items = {p.item.lower() for p in purchases}
 
             return {
-            "id": self.id,
-            "name": self.name,
-            "color": f"#{hex(self.color).replace('0x', '').zfill(6)}",
-            "score": {"total": self.get_score(), "health": self.score_uptime},
-            "offense": self.offensive,
-            "flags": {
-                "open": open_flags,
-                "lost": lost_flags,
-                "captured": captured_flags_count,
-            },
-            "tickets": {
-                "open": open_tickets,
-                "closed": closed_tickets,
-            },
-            "hosts": [h.get_json_scoreboard() for h in self.hosts if h.is_accessible],
-            "logo": self.logo or "default.png",
-            "beacons": self.get_beacons(),
-            "minimal": self.minimal,
-        }
+                "id": self.id,
+                "name": self.name,
+                "color": f"#{hex(self.color).replace('0x', '').zfill(6)}",
+                "score": {"total": self.get_score(), "health": self.score_uptime},
+                "offense": self.offensive,
+                "flags": {
+                    "open": open_flags,
+                    "lost": lost_flags,
+                    "captured": captured_flags_count,
+                },
+                "tickets": {
+                    "open": open_tickets,
+                    "closed": closed_tickets,
+                },
+                "hosts": [h.get_json_scoreboard() for h in self.hosts if h.check_accessible(purchased_items)],
+                "logo": self.logo or "default.png",
+                "beacons": self.get_beacons(),
+                "minimal": self.minimal,
+            }
         finally:
             if close_session:
                 session.close()
@@ -200,19 +204,23 @@ class Host(Base):
     services = relationship("Service", back_populates="host", cascade="all, delete-orphan")
     flags = relationship("Flag", back_populates="host", cascade="all, delete-orphan")
 
-    @property
-    def is_accessible(self):
+    def check_accessible(self, purchased_items: Optional[set] = None):
         """Returns True if the host is not purchasable, or if it is purchasable and has been purchased."""
         if not self.purchasable:
             return True
         if not self.team:
             return False
-        # Check if any purchase matches "VM Deployment: <name>"
         expected_item = f"VM Deployment: {self.name}".lower()
+        if purchased_items is not None:
+            return expected_item in purchased_items
         for p in self.team.purchases:
             if p.item.lower() == expected_item:
                 return True
         return False
+
+    @property
+    def is_accessible(self):
+        return self.check_accessible()
 
     def get_json_scoreboard(self):
         return {
@@ -325,8 +333,8 @@ class Flag(Base):
     description = Column(Text, nullable=False)
     value = Column(Integer, default=100)
     host_id = Column(Integer, ForeignKey("hosts.id", ondelete="CASCADE"), nullable=False)
-    team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="CASCADE"), nullable=False)
-    captured_team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="SET NULL"), nullable=True)
+    team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    captured_team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="SET NULL"), nullable=True, index=True)
 
     host = relationship("Host", back_populates="flags")
     team = relationship("GameTeam", foreign_keys=[team_id], back_populates="flags")
@@ -422,10 +430,10 @@ class GameCompromiseHost(Base):
     __tablename__ = "game_compromise_hosts"
 
     id = Column(Integer, primary_key=True, index=True)
-    ip = Column(String(50), nullable=False)
-    team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="CASCADE"), nullable=False)
-    host_id = Column(Integer, ForeignKey("hosts.id", ondelete="SET NULL"), nullable=True)
-    beacon_id = Column(Integer, ForeignKey("game_compromises.id", ondelete="CASCADE"), nullable=False)
+    ip = Column(String(50), nullable=False, index=True)
+    team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    host_id = Column(Integer, ForeignKey("hosts.id", ondelete="SET NULL"), nullable=True, index=True)
+    beacon_id = Column(Integer, ForeignKey("game_compromises.id", ondelete="CASCADE"), nullable=False, index=True)
     checkin = Column(DateTime, default=datetime.datetime.utcnow)
 
     compromise = relationship("GameCompromise", back_populates="hosts")
@@ -545,13 +553,19 @@ def init_db():
         "ALTER TABLE hosts ADD COLUMN purchasable BOOLEAN DEFAULT FALSE",
         "ALTER TABLE game_tickets ADD COLUMN point_value INTEGER DEFAULT 0",
         "ALTER TABLE games ADD COLUMN authenticated_checks BOOLEAN DEFAULT FALSE",
+        "CREATE INDEX IF NOT EXISTS ix_game_compromise_hosts_ip ON game_compromise_hosts (ip)",
+        "CREATE INDEX IF NOT EXISTS ix_game_compromise_hosts_team_id ON game_compromise_hosts (team_id)",
+        "CREATE INDEX IF NOT EXISTS ix_game_compromise_hosts_host_id ON game_compromise_hosts (host_id)",
+        "CREATE INDEX IF NOT EXISTS ix_game_compromise_hosts_beacon_id ON game_compromise_hosts (beacon_id)",
+        "CREATE INDEX IF NOT EXISTS ix_flags_team_id ON flags (team_id)",
+        "CREATE INDEX IF NOT EXISTS ix_flags_captured_team_id ON flags (captured_team_id)",
     ]
     for stmt in migrations:
         try:
             with engine.begin() as conn:
                 conn.execute(text(stmt))
         except Exception:
-            pass  # Column already exists or DB doesn't support ALTER TABLE
+            pass  # Column/Index already exists or DB doesn't support statement
 
 
 import logging

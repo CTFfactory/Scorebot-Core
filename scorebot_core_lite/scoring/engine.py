@@ -42,9 +42,12 @@ def score_round(session, game_id: int):
     ).with_for_update().all()
 
     # 1. Score host/service uptimes
+    from scorebot_core_lite.models import Purchase
     for team in game.teams:
+        purchases = session.query(Purchase.item).filter(Purchase.team_id == team.id).all()
+        purchased_items = {p.item.lower() for p in purchases}
         for host in team.hosts:
-            if not host.is_accessible:
+            if not host.check_accessible(purchased_items):
                 continue
             # Original scorebot: Host.get_score() returns 0 if not self.online.
             # Only score services if the host is marked online by the monitor.

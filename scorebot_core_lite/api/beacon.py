@@ -322,6 +322,8 @@ async def checkin_beacon(request: Request):
     finally:
         session.close()
 
+from sqlalchemy.orm import joinedload
+
 @router.get("/api/beacons/active", dependencies=[Depends(verify_cli_token)])
 def list_active_beacons(team_token: str):
     """Retrieve list of active beacons for a team."""
@@ -331,7 +333,7 @@ def list_active_beacons(team_token: str):
         if not team:
             raise HTTPException(status_code=404, detail="Team not found")
 
-        active = session.query(GameCompromise).filter(
+        active = session.query(GameCompromise).options(joinedload(GameCompromise.hosts)).filter(
             GameCompromise.finish == None,
             GameCompromise.attacker_team_id == team.id
         ).all()
