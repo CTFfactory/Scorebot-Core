@@ -113,13 +113,29 @@ class GameTeam(Base):
         return self.score_flags + self.score_uptime + self.score_tickets + self.score_beacons + adjustment_sum
 
     def get_beacons(self):
+        from sqlalchemy.orm import object_session
+        session = object_session(self)
+        if session is None:
+            return []
+        
+        active_ch = (
+            session.query(GameCompromiseHost)
+            .join(GameCompromise, GameCompromiseHost.beacon_id == GameCompromise.id)
+            .filter(GameCompromiseHost.team_id == self.id, GameCompromise.finish.is_(None))
+            .all()
+        )
+        
         beacons = []
-        for ch in self.compromised_hosts:
-            if ch.compromise.finish is None:
+        seen_compromises = set()
+        for ch in active_ch:
+            c = ch.compromise
+            if c and c.id not in seen_compromises:
+                seen_compromises.add(c.id)
+                attacker_color = f"#{hex(c.attacker.color).replace('0x', '').zfill(6)}" if (c.attacker and c.attacker.color) else "#ef4444"
                 beacons.append({
-                    "id": ch.compromise.id,
-                    "team": ch.compromise.attacker_team_id,
-                    "color": f"#{hex(ch.compromise.attacker.color).replace('0x', '').zfill(6)}",
+                    "id": c.id,
+                    "team": c.attacker_team_id,
+                    "color": attacker_color,
                 })
         return beacons
 

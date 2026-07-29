@@ -273,14 +273,29 @@ async def checkin_beacon(request: Request):
             return {"status": "success", "message": "Beacon registered"}
 
         else:
-            # Faux host compromise — check for any existing active beacon on this IP first.
-            # Original scorebot: GameCompromiseHost.objects.filter(ip=address_raw, beacon__finish__isnull=True).count() > 0 → 403.
+            # Faux host compromise — check if active compromise already exists for this team on this IP
             existing_faux = session.query(GameCompromise).join(GameCompromiseHost).filter(
+                GameCompromise.finish == None,
+                GameCompromise.attacker_team_id == attacker_team.id,
+                GameCompromiseHost.ip == address_raw,
+                GameCompromiseHost.host_id == None
+            ).first()
+
+            if existing_faux:
+                # Update checkin time
+                ch = session.query(GameCompromiseHost).filter(GameCompromiseHost.beacon_id == existing_faux.id).first()
+                if ch:
+                    ch.checkin = datetime.datetime.utcnow()
+                    session.commit()
+                return {"status": "success", "message": "Faux Beacon updated"}
+
+            # Check if ANY other active beacon (from any attacker) is already on this IP.
+            any_active_faux = session.query(GameCompromise).join(GameCompromiseHost).filter(
                 GameCompromise.finish == None,
                 GameCompromiseHost.ip == address_raw,
                 GameCompromiseHost.host_id == None
             ).first()
-            if existing_faux:
+            if any_active_faux:
                 raise HTTPException(status_code=403, detail="Already a Beacon on that Host!")
 
             # Flush to get compromise.id within the transaction.
