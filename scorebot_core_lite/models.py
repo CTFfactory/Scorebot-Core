@@ -521,10 +521,11 @@ if config.DATABASE_URL.startswith("sqlite"):
 else:
     engine = create_engine(
         config.DATABASE_URL,
-        pool_size=15,
-        max_overflow=25,
+        pool_size=30,
+        max_overflow=50,
         pool_pre_ping=True,
-        pool_timeout=30,
+        pool_timeout=15,
+        pool_recycle=1800,
     )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

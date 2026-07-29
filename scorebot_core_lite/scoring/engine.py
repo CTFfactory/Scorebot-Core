@@ -32,27 +32,20 @@ def score_round(session, game_id: int):
 
     logger.info(f"Starting scoring round for game {game.name} (ID: {game.id})")
 
-    # Lock all GameTeam rows for this game before any score modification.
-    # SQLAlchemy's identity map ensures game.teams will return these same
-    # already-locked objects, so no further locking is needed below.
-    # This serialises concurrent API score writes (beacon check-ins, flag
-    # captures, store purchases) against this scoring tick.
-    session.query(GameTeam).filter(
-        GameTeam.game_id == game_id
-    ).with_for_update().all()
-
-    # 1. Score host/service uptimes
+    # 1. Calculate host/service uptimes (read phase)
     from scorebot_core_lite.models import Purchase
+    uptime_scores = {}  # team_id -> list of (host_fqdn, host_score)
+    hosts_to_touch = []
+
     for team in game.teams:
         purchases = session.query(Purchase.item).filter(Purchase.team_id == team.id).all()
         purchased_items = {p.item.lower() for p in purchases}
+        team_uptime_entries = []
         for host in team.hosts:
             if not host.check_accessible(purchased_items):
                 continue
-            # Original scorebot: Host.get_score() returns 0 if not self.online.
-            # Only score services if the host is marked online by the monitor.
             if not host.online:
-                host.scored = now
+                hosts_to_touch.append(host)
                 continue
 
             from collections import defaultdict
@@ -88,40 +81,54 @@ def score_round(session, game_id: int):
                 host_score += group_max_score
 
             if host_score > 0:
+                team_uptime_entries.append((host.fqdn, host_score))
+            hosts_to_touch.append(host)
+
+        if team_uptime_entries:
+            uptime_scores[team.id] = team_uptime_entries
+
+    # 2. Gather active beacons (read phase)
+    active_compromises = session.query(GameCompromise).join(GameTeam, GameCompromise.attacker_team_id == GameTeam.id).filter(
+        GameTeam.game_id == game.id,
+        GameCompromise.finish == None
+    ).all()
+    beacon_penalties = []  # list of (victim_team_id, attacker_name, ip)
+    for compromise in active_compromises:
+        for ch in compromise.hosts:
+            if ch.team:
+                beacon_penalties.append((ch.team.id, compromise.attacker.name, ch.ip))
+
+    # Lock GameTeam rows briefly for write application
+    session.query(GameTeam).filter(
+        GameTeam.game_id == game_id
+    ).with_for_update().all()
+
+    # Apply uptime scores & ScoreAudits
+    for team in game.teams:
+        if team.id in uptime_scores:
+            for host_fqdn, host_score in uptime_scores[team.id]:
                 team.score_uptime += host_score
                 session.add(ScoreAudit(
                     team_id=team.id,
                     source="UPTIME",
                     amount=host_score,
-                    description=f"Uptime scored for {host.fqdn}"
+                    description=f"Uptime scored for {host_fqdn}"
                 ))
-                logger.debug(f"Team {team.name} Host {host.fqdn} scored +{host_score} uptime points")
-            host.scored = now
 
-    # 2. Score active beacons
-    # Per-round beacon scoring matches the original scorebot (GameCompromise.round_score):
-    #   - Victim team loses beacon_value points every round while the beacon is active.
-    #   - Attacker team does NOT gain per-round points; the attacker already received a
-    #     one-time bonus (beacon_value) when the beacon was first registered in the API.
-    active_compromises = session.query(GameCompromise).join(GameTeam, GameCompromise.attacker_team_id == GameTeam.id).filter(
-        GameTeam.game_id == game.id,
-        GameCompromise.finish == None
-    ).all()
+    # Apply beacon penalties & ScoreAudits
+    for victim_team_id, attacker_name, ch_ip in beacon_penalties:
+        team = next((t for t in game.teams if t.id == victim_team_id), None)
+        if team:
+            team.score_beacons -= game.beacon_value
+            session.add(ScoreAudit(
+                team_id=team.id,
+                source="BEACON-VICTIM",
+                amount=-game.beacon_value,
+                description=f"Compromised by {attacker_name} on {ch_ip}"
+            ))
 
-    for compromise in active_compromises:
-        # Find the compromise host information
-        for ch in compromise.hosts:
-            # Deduct points from compromised host's team only
-            victim_team = ch.team
-            if victim_team:
-                victim_team.score_beacons -= game.beacon_value
-                session.add(ScoreAudit(
-                    team_id=victim_team.id,
-                    source="BEACON-VICTIM",
-                    amount=-game.beacon_value,
-                    description=f"Compromised by {compromise.attacker.name} on {ch.ip}"
-                ))
-                logger.debug(f"Victim Team {victim_team.name} deducted {game.beacon_value} points due to active beacon on host {ch.ip} (attacker: {compromise.attacker.name})")
+    for host in hosts_to_touch:
+        host.scored = now
 
     # 3. Score open tickets
     # In the refactored ticket scoring model, open tickets do not accumulate penalty points.
