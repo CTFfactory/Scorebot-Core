@@ -58,7 +58,6 @@ INFRA_ROLES = frozenset({
     "zoob-router",
     "scorebot",
     "gold-ns",
-    "ns",
     "beacon",
     "factory",
     "health",
