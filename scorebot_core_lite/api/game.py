@@ -314,6 +314,7 @@ def import_game(data: GameImportSchema):
 
             team = GameTeam(
                 name=team_spec.name,
+                display_name=team_spec.display_name or None,
                 subnet=team_spec.subnet or "",
                 color=color_int,
                 offensive=False,
@@ -558,6 +559,7 @@ def get_game_details(game_id: int):
             teams_list.append({
                 "id": team.id,
                 "name": team.name,
+                "display_name": team.display_name,
                 "subnet": team.subnet,
                 "color": team.color,
                 "offensive": team.offensive,
@@ -647,6 +649,7 @@ def update_game_parameters(game_id: int, data: GameParametersSchema):
 
 
 class TeamUpdateSchema(BaseModel):
+    display_name: Optional[str] = None
     subnet: Optional[str] = None
     color: Optional[int] = None
     offensive: Optional[bool] = None

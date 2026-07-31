@@ -687,6 +687,7 @@
                                 </div>
                                 <form onsubmit="saveTeam(event, ${team.id})" class="team-header-form">
                                     <strong style="color: ${colorHex}; min-width: 100px;">${team.name}</strong>
+                                    <input type="text" name="display_name" value="${team.display_name || ''}" placeholder="Display Name (optional)" style="flex-grow: 2;">
                                     <input type="text" name="subnet" value="${team.subnet || ''}" placeholder="Subnet e.g. 10.1.1.0/24" style="flex-grow: 2;">
                                     <input type="color" name="color_picker" value="${colorHex}" style="width: 40px; padding: 0;">
                                     <select name="offensive">
@@ -872,6 +873,7 @@
         async function saveTeam(e, teamId) {
             e.preventDefault();
             const form = e.target;
+            const displayName = form.elements['display_name'].value;
             const subnet = form.elements['subnet'].value;
             const colorHex = form.elements['color_picker'].value;
             const colorDecimal = parseInt(colorHex.replace('#', ''), 16);
@@ -885,7 +887,7 @@
                     'Content-Type': 'application/json',
                     'X-Scorebot-Token': '{{ admin_token }}'
                 },
-                body: JSON.stringify({ subnet, color: colorDecimal, offensive, minimal, visible })
+                body: JSON.stringify({ display_name: displayName, subnet, color: colorDecimal, offensive, minimal, visible })
             });
 
             if (res.ok) {
@@ -896,8 +898,9 @@
         }
 
         async function addTeamPrompt(gameId) {
-            const name = prompt("Enter team name (e.g. red):");
+            const name = prompt("Enter team name (e.g. moonshot):");
             if (!name) return;
+            const displayName = prompt("Enter team display name (optional, e.g. Team Name):") || "";
             const subnet = prompt("Enter team subnet (optional, e.g. 10.1.1.0/24):") || "";
             const colorHex = prompt("Enter color HEX (optional, e.g. #E53935):", "#E53935") || "#E53935";
             const colorDecimal = parseInt(colorHex.replace('#', ''), 16);
@@ -910,7 +913,7 @@
                     'Content-Type': 'application/json',
                     'X-Scorebot-Token': '{{ admin_token }}'
                 },
-                body: JSON.stringify({ name, subnet, color: colorDecimal, offensive, minimal: false, visible })
+                body: JSON.stringify({ name, display_name: displayName, subnet, color: colorDecimal, offensive, minimal: false, visible })
             });
 
             if (res.ok) {

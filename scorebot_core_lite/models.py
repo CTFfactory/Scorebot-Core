@@ -84,6 +84,7 @@ class GameTeam(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(150), nullable=False)
+    display_name = Column(String(150), nullable=True)
     subnet = Column(String(90), nullable=False)
     logo = Column(String(200), default="default.png")
     offensive = Column(Boolean, default=False)
@@ -161,6 +162,7 @@ class GameTeam(Base):
             return {
                 "id": self.id,
                 "name": self.name,
+                "display_name": self.display_name,
                 "color": f"#{hex(self.color).replace('0x', '').zfill(6)}",
                 "score": {"total": self.get_score(), "health": self.score_uptime},
                 "offense": self.offensive,
@@ -554,6 +556,7 @@ def init_db():
         "ALTER TABLE hosts ADD COLUMN purchasable BOOLEAN DEFAULT FALSE",
         "ALTER TABLE game_tickets ADD COLUMN point_value INTEGER DEFAULT 0",
         "ALTER TABLE games ADD COLUMN authenticated_checks BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE game_teams ADD COLUMN display_name VARCHAR(150)",
         "CREATE INDEX IF NOT EXISTS ix_game_compromise_hosts_ip ON game_compromise_hosts (ip)",
         "CREATE INDEX IF NOT EXISTS ix_game_compromise_hosts_team_id ON game_compromise_hosts (team_id)",
         "CREATE INDEX IF NOT EXISTS ix_game_compromise_hosts_host_id ON game_compromise_hosts (host_id)",

@@ -117,6 +117,7 @@ class TeamSpec:
     """A team participating in a scored event."""
     name: str
     color: str
+    display_name: str = ""
     subnet: str = ""
     members: List[str] = field(default_factory=list)
     hosts: List[HostSpec] = field(default_factory=list)
@@ -211,6 +212,7 @@ def load_from_db(
         team_map[tname] = TeamSpec(
             name=tname,
             color=tdef.get("color", "blue"),
+            display_name=tdef.get("display_name", ""),
             subnet=subnets.get(tname, ""),
             members=tdef.get("members", []),
         )
@@ -290,6 +292,7 @@ def load_from_disk(
         team_map[tname] = TeamSpec(
             name=tname,
             color=tdef.get("color", "blue"),
+            display_name=tdef.get("display_name", ""),
             subnet=subnets.get(tname, ""),
             members=tdef.get("members", []),
         )
