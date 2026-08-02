@@ -129,4 +129,12 @@ def _get_media_dir():
 
 MEDIA_DIR = _get_media_dir()
 
+# Proxmox VE API Integration for Zero-Footprint Guest Operations
+PM_API_URL = os.getenv("PM_API_URL", "")
+PM_API_USER = os.getenv("PM_API_USER", "")
+PM_API_PASS = os.getenv("PM_API_PASS", "")
+PM_API_TOKEN_ID = os.getenv("PM_API_TOKEN_ID", "")
+PM_API_TOKEN_SECRET = os.getenv("PM_API_TOKEN_SECRET", "")
+
+
 

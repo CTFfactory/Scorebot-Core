@@ -200,6 +200,8 @@ class Host(Base):
     ip = Column(String(50), nullable=True)
     ping_last = Column(Integer, default=0)
     purchasable = Column(Boolean, default=False)
+    node = Column(String(50), nullable=True)
+    vmid = Column(String(50), nullable=True)
     team_id = Column(Integer, ForeignKey("game_teams.id", ondelete="CASCADE"), nullable=True)
 
     team = relationship("GameTeam", back_populates="hosts")
@@ -557,6 +559,8 @@ def init_db():
         "ALTER TABLE game_tickets ADD COLUMN point_value INTEGER DEFAULT 0",
         "ALTER TABLE games ADD COLUMN authenticated_checks BOOLEAN DEFAULT FALSE",
         "ALTER TABLE game_teams ADD COLUMN display_name VARCHAR(150)",
+        "ALTER TABLE hosts ADD COLUMN node VARCHAR(50)",
+        "ALTER TABLE hosts ADD COLUMN vmid VARCHAR(50)",
         "CREATE INDEX IF NOT EXISTS ix_game_compromise_hosts_ip ON game_compromise_hosts (ip)",
         "CREATE INDEX IF NOT EXISTS ix_game_compromise_hosts_team_id ON game_compromise_hosts (team_id)",
         "CREATE INDEX IF NOT EXISTS ix_game_compromise_hosts_host_id ON game_compromise_hosts (host_id)",

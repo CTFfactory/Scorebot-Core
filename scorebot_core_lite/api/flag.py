@@ -189,3 +189,239 @@ def register_flag(game_id: int, host_id: int, data: AdminFlagCreateSchema):
     finally:
         session.close()
 
+
+@router.get("/api/admin/games/{game_id}/flags", dependencies=[Depends(verify_admin_token)])
+def get_game_flags(game_id: int):
+    """Admin endpoint to retrieve all registered flags for a game."""
+    session = SessionLocal()
+    try:
+        flags = session.query(Flag).join(Host).join(GameTeam).filter(GameTeam.game_id == game_id).all()
+        return [
+            {
+                "id": f.id,
+                "name": f.name,
+                "flag": f.flag,
+                "enabled": f.enabled,
+                "description": f.description,
+                "value": f.value,
+                "host_id": f.host_id,
+                "host_name": f.host.name if f.host else None,
+                "host_fqdn": f.host.fqdn if f.host else None,
+                "team_id": f.team_id,
+                "team_name": f.team.name if f.team else None,
+                "captured_team_id": f.captured_team_id,
+            }
+            for f in flags
+        ]
+    finally:
+        session.close()
+
+
+@router.get("/api/admin/games/{game_id}/hosts/{host_id}/flags", dependencies=[Depends(verify_admin_token)])
+def get_host_flags(game_id: int, host_id: int):
+    """Admin endpoint to retrieve registered flags for a specific host."""
+    session = SessionLocal()
+    try:
+        host = session.query(Host).filter(Host.id == host_id).first()
+        if not host:
+            raise HTTPException(status_code=404, detail="Host not found")
+        if not host.team or host.team.game_id != game_id:
+            raise HTTPException(status_code=400, detail="Host team does not belong to the specified game")
+
+        flags = session.query(Flag).filter(Flag.host_id == host_id).all()
+        return [
+            {
+                "id": f.id,
+                "name": f.name,
+                "flag": f.flag,
+                "enabled": f.enabled,
+                "description": f.description,
+                "value": f.value,
+                "host_id": f.host_id,
+                "team_id": f.team_id,
+                "captured_team_id": f.captured_team_id,
+            }
+            for f in flags
+        ]
+    finally:
+        session.close()
+
+
+@router.post("/api/admin/games/{game_id}/flags/verify", dependencies=[Depends(verify_admin_token)])
+@router.get("/api/admin/games/{game_id}/flags/verify", dependencies=[Depends(verify_admin_token)])
+def verify_game_flags(game_id: int):
+    """Admin endpoint to verify flag presence and content for all hosts in a game via Proxmox QEMU Guest Agent API."""
+    import base64
+    import os
+    import json
+    import logging
+    import ssl
+    import urllib.request
+    import urllib.parse
+    from scorebot_core_lite import config
+
+    logger = logging.getLogger("scorebot_core_lite.api.flag")
+    session = SessionLocal()
+    try:
+        flags = session.query(Flag).join(Host).join(GameTeam).filter(GameTeam.game_id == game_id).all()
+        if not flags:
+            return {"status": "success", "message": "No registered flags found for game", "total_flags": 0, "results": []}
+
+        pm_url = config.PM_API_URL.rstrip("/")
+        pm_token_id = config.PM_API_TOKEN_ID
+        pm_token_secret = config.PM_API_TOKEN_SECRET
+
+        if not pm_url or not pm_token_id or not pm_token_secret:
+            return {
+                "status": "warning",
+                "message": "Proxmox API credentials not configured in Scorebot (PM_API_URL, PM_API_TOKEN_ID, PM_API_TOKEN_SECRET)",
+                "total_flags": len(flags),
+                "ok": 0,
+                "missing": 0,
+                "tampered": 0,
+                "unreachable": len(flags),
+                "results": [
+                    {
+                        "flag_id": f.id,
+                        "flag_name": f.name,
+                        "host_fqdn": f.host.fqdn if f.host else "",
+                        "team_name": f.team.name if f.team else "",
+                        "status": "UNCHECKED (Proxmox API credentials missing)",
+                        "method": "None"
+                    }
+                    for f in flags
+                ]
+            }
+
+        headers = {"Authorization": f"PVEAPIToken={pm_token_id}={pm_token_secret}"}
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+        cluster_map = {}
+        try:
+            req = urllib.request.Request(f"{pm_url}/cluster/resources?type=vm", headers=headers)
+            opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
+            with opener.open(req, timeout=10) as r:
+                data = json.loads(r.read().decode('utf-8')).get("data", [])
+                for vm in data:
+                    v_name = vm.get("name", "").lower()
+                    v_node = vm.get("node")
+                    v_id = str(vm.get("vmid", ""))
+                    if v_name and v_node and v_id:
+                        cluster_map[v_name] = (v_node, v_id)
+                        short_vname = v_name.split(".")[0]
+                        if short_vname not in cluster_map:
+                            cluster_map[short_vname] = (v_node, v_id)
+        except Exception as e:
+            logger.error(f"Error querying Proxmox cluster resources: {e}")
+
+        role_flag_paths = {}
+        if os.path.exists(config.GAME_DEFINITIONS_PATH):
+            try:
+                gdefs_file = os.path.join(config.GAME_DEFINITIONS_PATH, "game_definitions.json")
+                if not os.path.exists(gdefs_file):
+                    gdefs_file = "game_definitions.json"
+                if os.path.exists(gdefs_file):
+                    with open(gdefs_file, "r") as gf:
+                        gdefs = json.load(gf)
+                        for r in gdefs.get("role", []):
+                            r_name = r.get("role", {}).get("name")
+                            for fl in r.get("role", {}).get("flags", []):
+                                role_flag_paths[(r_name, fl.get("name"))] = fl.get("path")
+            except Exception:
+                pass
+
+        results = []
+        ok_cnt, missing_cnt, tampered_cnt, unreachable_cnt = 0, 0, 0, 0
+
+        for f in flags:
+            host_fqdn = f.host.fqdn if f.host else ""
+            host_name = f.host.name if f.host else ""
+            team_name = f.team.name if f.team else ""
+
+            node = f.host.node if (f.host and f.host.node) else None
+            vmid = f.host.vmid if (f.host and f.host.vmid) else None
+
+            if not node or not vmid:
+                pve_tuple = cluster_map.get(host_fqdn.lower()) or cluster_map.get(host_name.lower())
+                if pve_tuple:
+                    node, vmid = pve_tuple
+
+            path = f.description if (f.description and (f.description.startswith("/") or ":\\" in f.description or "C:\\" in f.description)) else None
+            if not path:
+                for (r_name, fl_name), p in role_flag_paths.items():
+                    if fl_name == f.name:
+                        path = p
+                        break
+
+            if not node or not vmid or not path:
+                unreachable_cnt += 1
+                results.append({
+                    "flag_id": f.id,
+                    "flag_name": f.name,
+                    "host_fqdn": host_fqdn,
+                    "team_name": team_name,
+                    "status": "UNREACHABLE (Missing Proxmox VMID or path)",
+                    "method": "PVE-Agent"
+                })
+                continue
+
+            enc_path = urllib.parse.quote(path, safe='')
+            agent_url = f"{pm_url}/nodes/{node}/qemu/{vmid}/agent/file-read?file={enc_path}"
+            status = "UNREACHABLE"
+
+            try:
+                areq = urllib.request.Request(agent_url, headers=headers)
+                opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
+                with opener.open(areq, timeout=10) as ar:
+                    adata = json.loads(ar.read().decode('utf-8')).get("data", {})
+                    b64_content = adata.get("content", "")
+                    content_str = base64.b64decode(b64_content).decode("utf-8", errors="ignore")
+                    if f.flag in content_str:
+                        status = "OK"
+                    else:
+                        status = "TAMPERED"
+            except urllib.error.HTTPError as he:
+                err_text = str(he.read().decode('utf-8', errors='ignore'))
+                if "No such file" in err_text or "NotFound" in err_text or "file not found" in err_text.lower():
+                    status = "MISSING"
+                else:
+                    status = "MISSING"
+            except Exception:
+                status = "UNREACHABLE"
+
+            if status == "OK":
+                ok_cnt += 1
+            elif status == "MISSING":
+                missing_cnt += 1
+            elif status == "TAMPERED":
+                tampered_cnt += 1
+            else:
+                unreachable_cnt += 1
+
+            results.append({
+                "flag_id": f.id,
+                "flag_name": f.name,
+                "host_fqdn": host_fqdn,
+                "team_name": team_name,
+                "status": status,
+                "method": "PVE-Agent"
+            })
+
+        overall_status = "success" if (missing_cnt == 0 and tampered_cnt == 0) else "warning"
+        return {
+            "status": overall_status,
+            "message": f"Flag audit complete: {ok_cnt} OK, {missing_cnt} MISSING, {tampered_cnt} TAMPERED, {unreachable_cnt} UNREACHABLE",
+            "total_flags": len(flags),
+            "ok": ok_cnt,
+            "missing": missing_cnt,
+            "tampered": tampered_cnt,
+            "unreachable": unreachable_cnt,
+            "results": results
+        }
+    finally:
+        session.close()
+
+
+
