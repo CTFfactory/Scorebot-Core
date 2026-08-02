@@ -87,6 +87,7 @@ class ServiceSpec:
     points: int
     name: str = ""
     application: str = "ping"
+    content: Optional[dict] = None
 
     def __post_init__(self):
         if not self.name:
@@ -368,6 +369,7 @@ def _populate_hosts(
                 protocol=svc.get("protocol", "TCP"),
                 points=int(svc.get("points", 0)),
                 application=svc.get("application", "ping"),
+                content=svc.get("content"),
             )
             for svc in raw_services
             if svc.get("port") is not None

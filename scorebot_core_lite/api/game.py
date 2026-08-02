@@ -19,6 +19,7 @@ import datetime
 import logging
 import io
 import os
+import json
 import xml.etree.ElementTree as ET
 from typing import Dict, Optional
 
@@ -28,7 +29,7 @@ from PIL import Image
 
 from scorebot_core_lite import config, ingest
 from scorebot_core_lite.auth import verify_admin_token
-from scorebot_core_lite.models import Game, GameTeam, Host, Service, SessionLocal, ScoreAdjustment
+from scorebot_core_lite.models import Game, GameTeam, Host, Service, Content, SessionLocal, ScoreAdjustment
 
 router = APIRouter()
 logger = logging.getLogger("scorebot_core_lite.api.game")
@@ -221,12 +222,34 @@ def import_game(data: GameImportSchema):
                         key = (svc_spec.port, proto)
                         if key in db_services:
                             svc = db_services[key]
+                            changed = False
                             if (svc.name != svc_spec.name[:64] or 
                                     svc.value != svc_spec.points or 
                                     svc.application != svc_spec.application[:64]):
                                 svc.name = svc_spec.name[:64]
                                 svc.value = svc_spec.points
                                 svc.application = svc_spec.application[:64]
+                                changed = True
+
+                            # Sync Content
+                            if svc_spec.content:
+                                content_json = json.dumps(svc_spec.content)
+                                if not svc.content:
+                                    svc.content = Content(
+                                        type=svc.application,
+                                        data=content_json
+                                    )
+                                    changed = True
+                                elif svc.content.data != content_json or svc.content.type != svc.application:
+                                    svc.content.data = content_json
+                                    svc.content.type = svc.application
+                                    changed = True
+                            else:
+                                if svc.content:
+                                    session.delete(svc.content)
+                                    changed = True
+
+                            if changed:
                                 services_updated += 1
                         else:
                             svc = Service(
@@ -239,6 +262,11 @@ def import_game(data: GameImportSchema):
                                 status=2,
                                 host_id=host.id,
                             )
+                            if svc_spec.content:
+                                svc.content = Content(
+                                    type=svc.application,
+                                    data=json.dumps(svc_spec.content)
+                                )
                             session.add(svc)
                             services_created += 1
                         spec_services.add(key)
@@ -349,6 +377,11 @@ def import_game(data: GameImportSchema):
                         status=2,  # timeout / offline until first score
                         host_id=host.id,
                     )
+                    if svc_spec.content:
+                        svc.content = Content(
+                            type=svc.application,
+                            data=json.dumps(svc_spec.content)
+                        )
                     session.add(svc)
                     services_created += 1
 
