@@ -56,8 +56,10 @@ def score_round(session, game_id: int):
                 app_groups[service.application.lower()].append(service)
 
             host_score = 0
+            svc_details = []
             for app_name, services in app_groups.items():
                 group_max_score = 0
+                group_max_reason = ""
                 for service in services:
                     is_active = (service.status == 0)
                     is_yellow = (service.status == 4)
@@ -66,22 +68,31 @@ def score_round(session, game_id: int):
                         is_yellow = False
 
                     svc_score = 0
+                    reason = "Down/Offline"
                     if is_active:
                         if service.content:
                             fraction = max(0, min(100, service.content.status))
                             svc_score = math.floor(service.value * (fraction / 100.0))
+                            reason = f"Pass (Authenticated, Content: {fraction}%)"
                         else:
                             svc_score = service.value
+                            reason = "Pass (Authenticated)"
                     elif is_yellow:
                         svc_score = math.floor(service.value * 0.5)
+                        reason = "Yellow (Unauthenticated / Auth Failed)"
 
-                    if svc_score > group_max_score:
+                    if svc_score >= group_max_score:
                         group_max_score = svc_score
+                        svc_label = service.name or app_name
+                        group_max_reason = f"{svc_label}:{service.port}={svc_score}/{service.value} ({reason})"
 
+                if group_max_reason:
+                    svc_details.append(group_max_reason)
                 host_score += group_max_score
 
             if host_score > 0:
-                team_uptime_entries.append((host.fqdn, host_score))
+                details_text = f" [{', '.join(svc_details)}]" if svc_details else ""
+                team_uptime_entries.append((host.fqdn, host_score, details_text))
             hosts_to_touch.append(host)
 
         if team_uptime_entries:
@@ -111,13 +122,13 @@ def score_round(session, game_id: int):
     # Apply uptime scores & ScoreAudits
     for team in game.teams:
         if team.id in uptime_scores:
-            for host_fqdn, host_score in uptime_scores[team.id]:
+            for host_fqdn, host_score, details_text in uptime_scores[team.id]:
                 team.score_uptime += host_score
                 session.add(ScoreAudit(
                     team_id=team.id,
                     source="UPTIME",
                     amount=host_score,
-                    description=f"Uptime scored for {host_fqdn}"
+                    description=f"Uptime scored for {host_fqdn}{details_text}"
                 ))
 
     # Apply per-round beacon scoring (awards for attacker, penalties for victim)
