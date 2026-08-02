@@ -92,11 +92,16 @@ def score_round(session, game_id: int):
         GameTeam.game_id == game.id,
         GameCompromise.finish == None
     ).all()
-    beacon_penalties = []  # list of (victim_team_id, attacker_name, ip)
+    beacon_ticks = []  # list of (attacker_team_id, victim_team_id, attacker_name, victim_name, ip)
     for compromise in active_compromises:
         for ch in compromise.hosts:
-            if ch.team:
-                beacon_penalties.append((ch.team.id, compromise.attacker.name, ch.ip))
+            beacon_ticks.append((
+                compromise.attacker_team_id,
+                ch.team_id if ch.team else None,
+                compromise.attacker.name if compromise.attacker else "Unknown",
+                ch.team.name if ch.team else "Unknown",
+                ch.ip
+            ))
 
     # Lock GameTeam rows briefly for write application
     session.query(GameTeam).filter(
@@ -115,17 +120,28 @@ def score_round(session, game_id: int):
                     description=f"Uptime scored for {host_fqdn}"
                 ))
 
-    # Apply beacon penalties & ScoreAudits
-    for victim_team_id, attacker_name, ch_ip in beacon_penalties:
-        team = next((t for t in game.teams if t.id == victim_team_id), None)
-        if team:
-            team.score_beacons -= game.beacon_value
+    # Apply per-round beacon scoring (awards for attacker, penalties for victim)
+    for attacker_team_id, victim_team_id, attacker_name, victim_name, ch_ip in beacon_ticks:
+        attacker_team = next((t for t in game.teams if t.id == attacker_team_id), None)
+        if attacker_team:
+            attacker_team.score_beacons += game.beacon_value
             session.add(ScoreAudit(
-                team_id=team.id,
-                source="BEACON-VICTIM",
-                amount=-game.beacon_value,
-                description=f"Compromised by {attacker_name} on {ch_ip}"
+                team_id=attacker_team.id,
+                source="BEACON-ATTACKER",
+                amount=game.beacon_value,
+                description=f"Active beacon on {ch_ip} ({victim_name})"
             ))
+
+        if victim_team_id:
+            victim_team = next((t for t in game.teams if t.id == victim_team_id), None)
+            if victim_team:
+                victim_team.score_beacons -= game.beacon_value
+                session.add(ScoreAudit(
+                    team_id=victim_team.id,
+                    source="BEACON-VICTIM",
+                    amount=-game.beacon_value,
+                    description=f"Compromised by {attacker_name} on {ch_ip}"
+                ))
 
     for host in hosts_to_touch:
         host.scored = now

@@ -264,9 +264,6 @@ async def checkin_beacon(request: Request):
             )
             session.add(ch)
 
-            # Award scoring once
-            attacker_team.score_beacons += attacker_team.game.beacon_value
-
             event_msg = f"A Host on {host.team.name}'s network was compromised by {attacker_team.name}!"
             send_notification(event_msg)
             session.commit()
@@ -311,8 +308,6 @@ async def checkin_beacon(request: Request):
                 checkin=datetime.datetime.utcnow()
             )
             session.add(ch)
-
-            attacker_team.score_beacons += attacker_team.game.beacon_value
 
             event_msg = f"A Host on {target_team.name}'s network was compromised by {attacker_team.name}!"
             send_notification(event_msg)
