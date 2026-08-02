@@ -12,18 +12,18 @@ def run_cleanup(session):
     # 1. Expire stale jobs
     open_jobs = session.query(Job).filter(Job.finish == None).all()
     for job in open_jobs:
-        game = session.query(Game).join(Job.host).filter(Job.id == job.id).first()
+        game = job.host.team.game if (job.host and job.host.team) else None
         job_timeout = game.job_timeout if game else 300
-        if (now - job.start).total_seconds() > job_timeout:
+        if job.start and (now - job.start).total_seconds() > job_timeout:
             logger.info(f"Deleting stale job {job.id} after passing timeout")
             session.delete(job)
 
     # 2. Cleanup finished jobs
     closed_jobs = session.query(Job).filter(Job.finish != None).all()
     for job in closed_jobs:
-        game = session.query(Game).join(Job.host).filter(Job.id == job.id).first()
+        game = job.host.team.game if (job.host and job.host.team) else None
         job_cleanup_time = game.job_cleanup_time if game else 900
-        if (now - job.finish).total_seconds() > job_cleanup_time:
+        if job.finish and (now - job.finish).total_seconds() > job_cleanup_time:
             logger.info(f"Deleting finished job {job.id} after cleanup timeout")
             session.delete(job)
 
