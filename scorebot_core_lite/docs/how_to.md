@@ -2,7 +2,10 @@
 
 This guide contains step-by-step recipes for deploying, configuring, and operating Scorebot Core Lite in typical CTF environments.
 
+* For operating dynamic scoreboard alerts and Rickrolls, see the [Scoreboard Admin Events Guide](file:///home/luftegrof/git/CTFfactory/Scorebot-Core/scorebot_core_lite/docs/events.md).
+
 ---
+
 
 ## How to Deploy via GitOps & Ansible
 
