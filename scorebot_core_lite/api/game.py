@@ -23,7 +23,7 @@ import json
 import xml.etree.ElementTree as ET
 from typing import Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request
 from pydantic import BaseModel
 from PIL import Image
 
@@ -1147,6 +1147,68 @@ async def upload_team_logo(team_id: int, file: UploadFile = File(...)):
         raise e
     finally:
         session.close()
+
+
+@router.post("/api/event/{game_id}", status_code=201)
+@router.post("/api/event/{game_id}/", status_code=201)
+async def api_event_create_cli(game_id: int, request: Request):
+    """Add a compatibility event creation endpoint for admins and CLI clients."""
+    from scorebot_core_lite.auth import verify_cli_token
+    from scorebot_core_lite.models import GameEvent
+    from fastapi import Response
+
+    # Verify SBE-AUTH or X-Scorebot-Token matches CLI/Admin permissions
+    await verify_cli_token(request)
+
+    session = SessionLocal()
+    try:
+        try:
+            body_bytes = await request.body()
+            body_text = body_bytes.decode("UTF-8")
+        except UnicodeError:
+            raise HTTPException(status_code=400, detail="Invalid Unicode!")
+
+        try:
+            data_payload = json.loads(body_text)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON!")
+
+        if "data" not in data_payload or not isinstance(data_payload["data"], dict):
+            raise HTTPException(status_code=400, detail="Bad JSON!")
+
+        game = session.query(Game).filter(Game.id == game_id).first()
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        event_type = data_payload.get("type", 0)
+        try:
+            event_type = int(event_type)
+            if event_type < 0 or event_type > 4:
+                raise HTTPException(status_code=400, detail="Bad Type Value!")
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Bad Type Value!")
+
+        timeout_seconds = data_payload.get("timeout", 30)
+        try:
+            timeout_seconds = int(timeout_seconds)
+            if timeout_seconds <= 0:
+                raise HTTPException(status_code=400, detail="Bad Timeout Value!")
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Bad Timeout Value!")
+
+        event = GameEvent(
+            game_id=game.id,
+            timeout=datetime.datetime.utcnow() + datetime.timedelta(seconds=timeout_seconds),
+            data=json.dumps(data_payload["data"]),
+            type=event_type
+        )
+        session.add(event)
+        session.commit()
+
+        return Response(status_code=201)
+    finally:
+        session.close()
+
 
 
 
