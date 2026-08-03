@@ -1210,5 +1210,20 @@ async def api_event_create_cli(game_id: int, request: Request):
         session.close()
 
 
+@router.delete("/api/event/{game_id}", dependencies=[Depends(verify_admin_token)])
+@router.delete("/api/event/{game_id}/", dependencies=[Depends(verify_admin_token)])
+def api_event_clear(game_id: int):
+    """Clear all events for a specific game."""
+    from scorebot_core_lite.models import GameEvent
+    session = SessionLocal()
+    try:
+        session.query(GameEvent).filter(GameEvent.game_id == game_id).delete()
+        session.commit()
+        return {"status": "success", "message": "All events cleared"}
+    finally:
+        session.close()
+
+
+
 
 

@@ -441,11 +441,186 @@
                         <button type="submit" class="btn" style="width: 100%;">Create Game</button>
                     </form>
                 </div>
+                <div class="panel">
+                    <h2>Scoreboard Event / Alert Controller</h2>
+                    <form id="scoreboardEventForm">
+                        <div class="form-group">
+                            <label for="eventGameId">Target Game</label>
+                            <select id="eventGameId" required>
+                                {% for game in games %}
+                                <option value="{{ game.id }}" {% if game.status == 1 %}selected{% endif %}>{{ game.name }} (ID: {{ game.id }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="eventType">Event Type</label>
+                            <select id="eventType" onchange="toggleEventFields()" required>
+                                <option value="0">Terminal Message (Type 0)</option>
+                                <option value="1">Popup Alert Box (Type 1)</option>
+                                <option value="2">Raw HTML/CSS Effect (Type 2)</option>
+                                <option value="3">YouTube Video Overlay (Type 3)</option>
+                            </select>
+                        </div>
+
+                        <!-- Type 0 Fields -->
+                        <div id="event-type-0-fields">
+                            <div class="form-group">
+                                <label for="eventCmdText">Simulated Command</label>
+                                <input type="text" id="eventCmdText" placeholder="e.g. rm -rf /opt/scorebot">
+                            </div>
+                            <div class="form-group">
+                                <label for="eventCmdResponse">Response Output</label>
+                                <textarea id="eventCmdResponse" rows="3" placeholder="e.g. Permission denied" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 8px; padding: 0.5rem; box-sizing: border-box; font-family: monospace;"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Type 1 Fields -->
+                        <div id="event-type-1-fields" style="display: none;">
+                            <div class="form-group">
+                                <label for="eventPopupTitle">Popup Title</label>
+                                <input type="text" id="eventPopupTitle" placeholder="e.g. ALERT: COMPROMISE DETECTED">
+                            </div>
+                            <div class="form-group">
+                                <label for="eventPopupText">Alert Body Message</label>
+                                <textarea id="eventPopupText" rows="3" placeholder="e.g. Immediate quarantine initiated." style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 8px; padding: 0.5rem; box-sizing: border-box;"></textarea>
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                                <input type="checkbox" id="eventPopupFullscreen" style="width: auto; margin: 0;">
+                                <label for="eventPopupFullscreen" style="margin: 0; color: #e5e7eb; cursor: pointer;">Fullscreen Overlay</label>
+                            </div>
+                        </div>
+
+                        <!-- Type 2 Fields -->
+                        <div id="event-type-2-fields" style="display: none;">
+                            <div class="form-group">
+                                <label for="eventHtmlContent">Raw HTML / CSS / JS code</label>
+                                <textarea id="eventHtmlContent" rows="6" placeholder="e.g. &lt;style&gt;body { filter: invert(1); }&lt;/style&gt;" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 8px; padding: 0.5rem; box-sizing: border-box; font-family: monospace;"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Type 3 Fields -->
+                        <div id="event-type-3-fields" style="display: none;">
+                            <div class="form-group">
+                                <label for="eventVideoId">YouTube Video ID</label>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <input type="text" id="eventVideoId" placeholder="e.g. dQw4w9WgXcQ" style="flex-grow: 1;">
+                                    <button type="button" class="btn btn-sm btn-info" onclick="prefillRickroll()">Rickroll</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="eventVideoStart">Start Time (seconds)</label>
+                                <input type="text" id="eventVideoStart" value="0">
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                                <input type="checkbox" id="eventVideoFullscreen" checked style="width: auto; margin: 0;">
+                                <label for="eventVideoFullscreen" style="margin: 0; color: #e5e7eb; cursor: pointer;">Fullscreen Overlay</label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="eventTimeout">Active Timeout (seconds)</label>
+                            <input type="number" id="eventTimeout" value="45" min="1" required>
+                        </div>
+
+                        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                            <button type="submit" class="btn btn-success" style="flex-grow: 1;">Trigger Alert</button>
+                            <button type="button" class="btn btn-danger" onclick="clearActiveEvents()">Clear Board</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
+        function toggleEventFields() {
+            const type = document.getElementById('eventType').value;
+            document.getElementById('event-type-0-fields').style.display = type === '0' ? 'block' : 'none';
+            document.getElementById('event-type-1-fields').style.display = type === '1' ? 'block' : 'none';
+            document.getElementById('event-type-2-fields').style.display = type === '2' ? 'block' : 'none';
+            document.getElementById('event-type-3-fields').style.display = type === '3' ? 'block' : 'none';
+        }
+
+        function prefillRickroll() {
+            document.getElementById('eventVideoId').value = 'dQw4w9WgXcQ';
+            document.getElementById('eventVideoStart').value = '0';
+        }
+
+        async function clearActiveEvents() {
+            const gameId = document.getElementById('eventGameId').value;
+            if (!gameId) {
+                alert('No game selected');
+                return;
+            }
+            if (!confirm('Are you sure you want to stop and clear all scoreboard events for this game?')) {
+                return;
+            }
+            const res = await fetch(`/api/event/${gameId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-Scorebot-Token': '{{ admin_token }}'
+                }
+            });
+            if (res.ok) {
+                alert('Board cleared successfully!');
+            } else {
+                alert('Failed to clear board');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('scoreboardEventForm');
+            if (form) {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const gameId = document.getElementById('eventGameId').value;
+                    const type = parseInt(document.getElementById('eventType').value);
+                    const timeout = parseInt(document.getElementById('eventTimeout').value);
+
+                    let data = {};
+                    if (type === 0) {
+                        data = {
+                            command: document.getElementById('eventCmdText').value || 'true',
+                            text: document.getElementById('eventCmdText').value || '',
+                            response: document.getElementById('eventCmdResponse').value || ''
+                        };
+                    } else if (type === 1) {
+                        data = {
+                            title: document.getElementById('eventPopupTitle').value || 'ALERT',
+                            text: document.getElementById('eventPopupText').value || '',
+                            fullscreen: document.getElementById('eventPopupFullscreen').checked ? 'true' : 'false'
+                        };
+                    } else if (type === 2) {
+                        data = {
+                            html: document.getElementById('eventHtmlContent').value || ''
+                        };
+                    } else if (type === 3) {
+                        data = {
+                            video: document.getElementById('eventVideoId').value || '',
+                            start: document.getElementById('eventVideoStart').value || '0',
+                            fullscreen: document.getElementById('eventVideoFullscreen').checked ? 'true' : 'false'
+                        };
+                    }
+
+                    const res = await fetch(`/api/event/${gameId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Scorebot-Token': '{{ admin_token }}'
+                        },
+                        body: JSON.stringify({ type, timeout, data })
+                    });
+
+                    if (res.ok) {
+                        alert('Event triggered successfully!');
+                    } else {
+                        const err = await res.json();
+                        alert(`Failed to trigger event: ${err.detail || 'unknown error'}`);
+                    }
+                });
+            }
+        });
+
         function copyToClipboard(text, message = 'Copied to clipboard!') {
             if (navigator.clipboard && window.isSecureContext) {
                 navigator.clipboard.writeText(text).then(() => {
