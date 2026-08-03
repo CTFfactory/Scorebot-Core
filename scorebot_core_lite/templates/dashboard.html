@@ -505,6 +505,7 @@
                                 <div style="display: flex; gap: 0.5rem;">
                                     <input type="text" id="eventVideoId" placeholder="e.g. dQw4w9WgXcQ" style="flex-grow: 1;">
                                     <button type="button" class="btn btn-sm btn-info" onclick="prefillRickroll()">Rickroll</button>
+                                    <button type="button" class="btn btn-sm btn-info" onclick="prefillWindmill()">Windmill</button>
                                 </div>
                             </div>
                             <div class="form-group">
@@ -544,6 +545,12 @@
         function prefillRickroll() {
             document.getElementById('eventVideoId').value = 'dQw4w9WgXcQ';
             document.getElementById('eventVideoStart').value = '0';
+        }
+
+        function prefillWindmill() {
+            document.getElementById('eventVideoId').value = 'b6RkpoWSQ5E';
+            document.getElementById('eventVideoStart').value = '0';
+            document.getElementById('eventTimeout').value = '91';
         }
 
         async function clearActiveEvents() {
