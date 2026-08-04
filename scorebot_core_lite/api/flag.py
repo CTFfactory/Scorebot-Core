@@ -59,30 +59,36 @@ async def capture_flag(request: Request):
         # 5. Perform capture
         flag.captured_team_id = attacker.id
 
-        # Deduct from victim
+        # Deduct/Award points based on flag_stolen_rate setting
         game = attacker.game
         if game.flag_stolen_rate > 0:
             stolen_amt = game.flag_stolen_rate
+            victim.score_flags -= stolen_amt
+            session.add(ScoreAudit(
+                team_id=victim.id,
+                source="FLAG-STOLEN",
+                amount=-stolen_amt,
+                description=f"Flag stolen by {attacker.name}"
+            ))
         else:
             stolen_amt = flag.value * game.flag_captured_multiplier
+            victim.score_flags -= stolen_amt
+            session.add(ScoreAudit(
+                team_id=victim.id,
+                source="FLAG-STOLEN",
+                amount=-stolen_amt,
+                description=f"Flag stolen by {attacker.name}"
+            ))
 
-        victim.score_flags -= stolen_amt
-        session.add(ScoreAudit(
-            team_id=victim.id,
-            source="FLAG-STOLEN",
-            amount=-stolen_amt,
-            description=f"Flag stolen by {attacker.name}"
-        ))
-
-        # Add to attacker
-        capture_amt = flag.value * game.flag_captured_multiplier
-        attacker.score_flags += capture_amt
-        session.add(ScoreAudit(
-            team_id=attacker.id,
-            source="FLAG-CAPTURE",
-            amount=capture_amt,
-            description=f"Captured flag from {victim.name}"
-        ))
+            # Add to attacker
+            capture_amt = flag.value * game.flag_captured_multiplier
+            attacker.score_flags += capture_amt
+            session.add(ScoreAudit(
+                team_id=attacker.id,
+                source="FLAG-CAPTURE",
+                amount=capture_amt,
+                description=f"Captured flag from {victim.name}"
+            ))
 
         # Add Event
         event_msg = f"A Flag from {victim.name} was stolen by {attacker.name}!"

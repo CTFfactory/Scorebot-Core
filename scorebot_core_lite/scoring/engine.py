@@ -99,13 +99,21 @@ def score_round(session, game_id: int):
             uptime_scores[team.id] = team_uptime_entries
 
     # 2. Gather active beacons (read phase)
+    from scorebot_core_lite.models import GameCompromise
     active_compromises = session.query(GameCompromise).join(GameTeam, GameCompromise.attacker_team_id == GameTeam.id).filter(
         GameTeam.game_id == game.id,
         GameCompromise.finish == None
     ).all()
+    
     beacon_ticks = []  # list of (attacker_team_id, victim_team_id, attacker_name, victim_name, ip)
+    seen_systems = set()  # Track unique host/IP systems to avoid duplicate ticks per system
     for compromise in active_compromises:
         for ch in compromise.hosts:
+            system_key = f"host_{ch.host_id}" if ch.host_id else f"ip_{ch.ip}"
+            if system_key in seen_systems:
+                continue
+            seen_systems.add(system_key)
+
             beacon_ticks.append((
                 compromise.attacker_team_id,
                 ch.team_id if ch.team else None,
@@ -131,18 +139,8 @@ def score_round(session, game_id: int):
                     description=f"Uptime scored for {host_fqdn}{details_text}"
                 ))
 
-    # Apply per-round beacon scoring (awards for attacker, penalties for victim)
+    # Apply per-round beacon scoring (penalties for victim)
     for attacker_team_id, victim_team_id, attacker_name, victim_name, ch_ip in beacon_ticks:
-        attacker_team = next((t for t in game.teams if t.id == attacker_team_id), None)
-        if attacker_team:
-            attacker_team.score_beacons += game.beacon_value
-            session.add(ScoreAudit(
-                team_id=attacker_team.id,
-                source="BEACON-ATTACKER",
-                amount=game.beacon_value,
-                description=f"Active beacon on {ch_ip} ({victim_name})"
-            ))
-
         if victim_team_id:
             victim_team = next((t for t in game.teams if t.id == victim_team_id), None)
             if victim_team:

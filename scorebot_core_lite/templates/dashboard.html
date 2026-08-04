@@ -768,39 +768,39 @@
                                             </div>
                                             <div class="form-group">
                                                 <label>Flag Stolen Rate</label>
-                                                <input type="number" name="flag_stolen_rate" value="${game.flag_stolen_rate || 8400}" required>
+                                                <input type="number" name="flag_stolen_rate" value="${game.flag_stolen_rate !== undefined && game.flag_stolen_rate !== null ? game.flag_stolen_rate : 8400}" required>
                                             </div>
                                             <div class="form-group">
                                                 <label>Flag Multiplier</label>
-                                                <input type="number" name="flag_captured_multiplier" value="${game.flag_captured_multiplier || 300}" required>
+                                                <input type="number" name="flag_captured_multiplier" value="${game.flag_captured_multiplier !== undefined && game.flag_captured_multiplier !== null ? game.flag_captured_multiplier : 300}" required>
                                             </div>
                                             <div class="form-group">
                                                 <label>Beacon Value</label>
-                                                <input type="number" name="beacon_value" value="${game.beacon_value || 100}" required>
+                                                <input type="number" name="beacon_value" value="${game.beacon_value !== undefined && game.beacon_value !== null ? game.beacon_value : 100}" required>
                                             </div>
                                             <div class="form-group">
                                                 <label>Beacon Time (sec)</label>
-                                                <input type="number" name="beacon_time" value="${game.beacon_time || 300}" required>
+                                                <input type="number" name="beacon_time" value="${game.beacon_time !== undefined && game.beacon_time !== null ? game.beacon_time : 300}" required>
                                             </div>
                                             <div class="form-group">
                                                 <label>Ticket Cost</label>
-                                                <input type="number" name="ticket_cost" value="${game.ticket_cost || 125}" required>
+                                                <input type="number" name="ticket_cost" value="${game.ticket_cost !== undefined && game.ticket_cost !== null ? game.ticket_cost : 125}" required>
                                             </div>
                                             <div class="form-group">
                                                 <label>Ticket Max Score</label>
-                                                <input type="number" name="ticket_max_score" value="${game.ticket_max_score || 6000}" required>
+                                                <input type="number" name="ticket_max_score" value="${game.ticket_max_score !== undefined && game.ticket_max_score !== null ? game.ticket_max_score : 6000}" required>
                                             </div>
                                             <div class="form-group">
                                                 <label>Ticket Grace (sec)</label>
-                                                <input type="number" name="ticket_grace_period" value="${game.ticket_grace_period || 900}" required>
+                                                <input type="number" name="ticket_grace_period" value="${game.ticket_grace_period !== undefined && game.ticket_grace_period !== null ? game.ticket_grace_period : 900}" required>
                                             </div>
                                             <div class="form-group">
                                                 <label>Ticket Max Scoring</label>
-                                                <input type="number" name="ticket_max_scoring" value="${game.ticket_max_scoring || 14400}" required>
+                                                <input type="number" name="ticket_max_scoring" value="${game.ticket_max_scoring !== undefined && game.ticket_max_scoring !== null ? game.ticket_max_scoring : 14400}" required>
                                             </div>
                                             <div class="form-group">
                                                 <label>Ping Ratio (%)</label>
-                                                <input type="number" name="host_ping_ratio" value="${game.host_ping_ratio || 50}" required>
+                                                <input type="number" name="host_ping_ratio" value="${game.host_ping_ratio !== undefined && game.host_ping_ratio !== null ? game.host_ping_ratio : 50}" required>
                                             </div>
                                             <div class="form-group" style="grid-column: span 2; display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
                                                 <input type="checkbox" name="authenticated_checks" id="auth-checks-${gameId}" ${game.authenticated_checks ? 'checked' : ''} style="width: auto; margin: 0;">

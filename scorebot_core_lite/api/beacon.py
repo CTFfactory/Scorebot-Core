@@ -3,7 +3,7 @@ import uuid
 import socket
 from fastapi import APIRouter, HTTPException, Depends, Request
 from scorebot_core_lite.models import (
-    SessionLocal, GameTeam, GameTeamBeaconToken, Host, GameCompromise, GameCompromiseHost, Game, Service, GamePort
+    SessionLocal, GameTeam, GameTeamBeaconToken, Host, GameCompromise, GameCompromiseHost, Game, Service, GamePort, ScoreAudit
 )
 from scorebot_core_lite.auth import verify_cli_token
 from scorebot_core_lite.scoring.notifications import send_notification
@@ -239,10 +239,10 @@ async def checkin_beacon(request: Request):
                     session.commit()
                 return {"status": "success", "message": "Beacon updated"}
 
-            # Check if ANY other active beacon (from any attacker) is already on this host.
-            # Original scorebot: host.beacons.filter(beacon__finish__isnull=True).count() > 1 → 403.
+            # Check if this attacker team already has an active beacon on this host.
             any_active = session.query(GameCompromise).join(GameCompromiseHost).filter(
                 GameCompromise.finish == None,
+                GameCompromise.attacker_team_id == attacker_team.id,
                 GameCompromiseHost.host_id == host.id
             ).first()
             if any_active:
@@ -263,6 +263,15 @@ async def checkin_beacon(request: Request):
                 checkin=datetime.datetime.utcnow()
             )
             session.add(ch)
+
+            # Award one-time registration reward to attacker
+            attacker_team.score_beacons += attacker_team.game.beacon_value
+            session.add(ScoreAudit(
+                team_id=attacker_team.id,
+                source="BEACON-ATTACKER",
+                amount=attacker_team.game.beacon_value,
+                description=f"Initial compromise on {address_raw} ({host.team.name})"
+            ))
 
             event_msg = f"A Host on {host.team.name}'s network was compromised by {attacker_team.name}!"
             send_notification(event_msg)
@@ -286,9 +295,10 @@ async def checkin_beacon(request: Request):
                     session.commit()
                 return {"status": "success", "message": "Faux Beacon updated"}
 
-            # Check if ANY other active beacon (from any attacker) is already on this IP.
+            # Check if this attacker team already has an active faux beacon on this IP.
             any_active_faux = session.query(GameCompromise).join(GameCompromiseHost).filter(
                 GameCompromise.finish == None,
+                GameCompromise.attacker_team_id == attacker_team.id,
                 GameCompromiseHost.ip == address_raw,
                 GameCompromiseHost.host_id == None
             ).first()
@@ -309,6 +319,15 @@ async def checkin_beacon(request: Request):
             )
             session.add(ch)
 
+            # Award one-time registration reward to attacker
+            attacker_team.score_beacons += attacker_team.game.beacon_value
+            session.add(ScoreAudit(
+                team_id=attacker_team.id,
+                source="BEACON-ATTACKER",
+                amount=attacker_team.game.beacon_value,
+                description=f"Initial faux compromise on {address_raw} ({target_team.name})"
+            ))
+
             event_msg = f"A Host on {target_team.name}'s network was compromised by {attacker_team.name}!"
             send_notification(event_msg)
             session.commit()
@@ -319,14 +338,28 @@ async def checkin_beacon(request: Request):
 
 from sqlalchemy.orm import joinedload
 
-@router.get("/api/beacons/active", dependencies=[Depends(verify_cli_token)])
-def list_active_beacons(team_token: str):
+@router.get("/api/beacons/active")
+async def list_active_beacons(team_token: str, request: Request):
     """Retrieve list of active beacons for a team."""
     session = SessionLocal()
     try:
         team = session.query(GameTeam).filter(GameTeam.token == team_token).first()
         if not team:
             raise HTTPException(status_code=404, detail="Team not found")
+
+        # Verify authorization: either system CLI/Admin, or they provide the team's own token
+        is_cli = False
+        try:
+            await verify_cli_token(request)
+            is_cli = True
+        except HTTPException:
+            pass
+
+        if not is_cli:
+            from scorebot_core_lite.auth import _get_token
+            client_token = _get_token(request)
+            if not client_token or client_token != team.token:
+                raise HTTPException(status_code=403, detail="Forbidden: CLI privilege or matching Team Token required")
 
         active = session.query(GameCompromise).options(joinedload(GameCompromise.hosts)).filter(
             GameCompromise.finish == None,
