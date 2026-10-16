@@ -44,31 +44,61 @@ async def register_host(request: Request):
             host.name = host_short_name
             host.team_id = team.id
 
-        # Register services
+        # Reconcile services in-place to preserve service IDs, status, and credentials (Content)
+        import json
+        from scorebot_core_lite.models import Content
+
         services_list = body.get("services", [])
-        # Remove old services to prevent duplicates
-        session.query(Service).filter(Service.host_id == host.id).delete()
+        if services_list:
+            db_services = {(s.port, s.protocol): s for s in host.services}
+            seen_keys = set()
 
-        for svc in services_list:
-            port = int(svc.get("port", 80))
-            name = svc.get("name", f"port_{port}")
-            bonus = bool(svc.get("bonus", False))
-            value = int(svc.get("value", 50))
-            app = svc.get("application", "ping")
-            proto_str = svc.get("protocol", "tcp").lower()
-            proto = 2 if proto_str == "udp" else 1
+            for svc in services_list:
+                port = int(svc.get("port", 80))
+                name = svc.get("name", f"port_{port}")
+                bonus = bool(svc.get("bonus", False))
+                value = int(svc.get("value", 50))
+                app = svc.get("application", "ping")
+                proto_str = svc.get("protocol", "tcp").lower()
+                proto = 2 if proto_str == "udp" else 1
+                svc_content = svc.get("content")
+                key = (port, proto)
+                seen_keys.add(key)
 
-            service = Service(
-                port=port,
-                name=name[:64],
-                bonus=bonus,
-                value=value,
-                host_id=host.id,
-                application=app[:64],
-                protocol=proto,
-                status=2  # default offline timeout status
-            )
-            session.add(service)
+                if key in db_services:
+                    service = db_services[key]
+                    service.name = name[:64]
+                    service.bonus = bonus
+                    service.value = value
+                    # Do not overwrite a valid application type with a generic tcp/port or udp/port fallback
+                    if not app.lower().startswith(("tcp/", "udp/")) or (service.application or "").lower().startswith(("tcp/", "udp/")):
+                        service.application = app[:64]
+                    if svc_content and not service.content:
+                        service.content = Content(
+                            type=service.application,
+                            data=json.dumps(svc_content)
+                        )
+                else:
+                    service = Service(
+                        port=port,
+                        name=name[:64],
+                        bonus=bonus,
+                        value=value,
+                        host_id=host.id,
+                        application=app[:64],
+                        protocol=proto,
+                        status=2  # default offline timeout status
+                    )
+                    if svc_content:
+                        service.content = Content(
+                            type=service.application,
+                            data=json.dumps(svc_content)
+                        )
+                    session.add(service)
+
+            for key, service in db_services.items():
+                if key not in seen_keys:
+                    session.delete(service)
 
         session.commit()
         return {"id": host.id, "status": "success", "message": "Host registered"}
